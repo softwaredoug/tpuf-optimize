@@ -40,5 +40,5 @@ uv run query --queries queries.csv --output results.csv
 
 The batch command assigns query IDs (`q1`, `q2`, ...), applies the locale filter,
 and writes ranked document IDs and scores. Queries combine BM25 title and
-description scores, with title weighted twice as heavily. Queries with no hits
-are emitted with the `-1,-1,-1` sentinel row.
+description scores at weights 6 and 1, respectively, and add brand at weight 1.
+Queries with no hits are emitted with the `-1,-1,-1` sentinel row.
