@@ -7,7 +7,7 @@ from typing import Protocol
 from turbopuffer.types import Filter, NamespaceQueryResponse, RankBy, Row
 
 
-TITLE_WEIGHT = 2.0
+TITLE_WEIGHT = 6.0
 DESCRIPTION_WEIGHT = 1.0
 
 
@@ -25,7 +25,7 @@ class QueryNamespace(Protocol):
 
 
 def rank_by(query_text: str) -> RankBy:
-    """Build a BM25 score with title weighted twice as much as description."""
+    """Build a BM25 score with title weighted six times as much as description."""
     return (
         "Sum",
         (
