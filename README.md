@@ -1,0 +1,31 @@
+# Turbopuffer experiments
+
+Utilities for indexing datasets into Turbopuffer and experimenting with search
+parameters.
+
+## Setup
+
+This project uses Python 3.15.2, managed by asdf, and `uv` for the environment
+and dependencies:
+
+```sh
+uv sync
+uv run pre-commit install
+```
+
+The `tpuf-helpers` and `cheat-at-search` dependencies are pinned to specific Git
+revisions in `pyproject.toml`.
+
+## Index the ESCI corpus
+
+Set `TURBOPUFFER_API_KEY`, then run:
+
+```sh
+uv run index-esci --namespace esci-products --region gcp-us-central1
+```
+
+The command uses `cheat_at_search.esci_data.corpus`, upserts documents in batches,
+and enables BM25 full-text search for title, description, brand, bullet point,
+color, and category attributes. Use `--limit N` to index a subset or `--dry-run`
+to load the corpus and print the number of rows without writing to Turbopuffer.
+The region defaults to `TURBOPUFFER_REGION` or `gcp-us-central1`.
