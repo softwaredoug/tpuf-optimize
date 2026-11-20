@@ -25,9 +25,9 @@ class QueryNamespace(Protocol):
 
 
 def rank_by(query_text: str) -> RankBy:
-    """Build a BM25 score with title weighted six times as much as description."""
+    """Take the maximum weighted BM25 score from title and description."""
     return (
-        "Sum",
+        "Max",
         (
             ("Product", TITLE_WEIGHT, ("title", "BM25", query_text)),
             ("Product", DESCRIPTION_WEIGHT, ("description", "BM25", query_text)),
