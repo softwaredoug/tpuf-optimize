@@ -41,9 +41,8 @@ uv run query --queries queries.csv --output results.csv
 
 The batch command assigns query IDs (`q1`, `q2`, ...), applies the locale filter,
 and writes ranked document IDs and scores. Requests are sent in batches through
-Turbopuffer's multi-query API. Queries combine BM25 title and description scores,
-with title weighted twice as heavily. Queries with no hits are emitted with the
-`-1,-1,-1` sentinel row.
+Turbopuffer's multi-query API. Queries use BM25 title scoring. Queries with no
+hits are emitted with the `-1,-1,-1` sentinel row.
 
 ## Search architecture
 

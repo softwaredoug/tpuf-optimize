@@ -15,7 +15,6 @@ class TPufStrategy:
     """Own the schema, document mapping, and query behavior being optimized."""
 
     TITLE_WEIGHT = 2.0
-    DESCRIPTION_WEIGHT = 1.0
 
     TEXT_COLUMNS = {
         "title": "title",
@@ -77,18 +76,8 @@ class TPufStrategy:
             emitted += 1
 
     def rank_by(self, query_text: str) -> RankBy:
-        """Build a BM25 score with title weighted twice as much as description."""
-        return (
-            "Sum",
-            (
-                ("Product", self.TITLE_WEIGHT, ("title", "BM25", query_text)),
-                (
-                    "Product",
-                    self.DESCRIPTION_WEIGHT,
-                    ("description", "BM25", query_text),
-                ),
-            ),
-        )
+        """Rank products by title BM25."""
+        return ("Product", self.TITLE_WEIGHT, ("title", "BM25", query_text))
 
     def query(self, query_text: str, locale: str, top_k: int) -> Query:
         """Build one locale-filtered query for Turbopuffer's multi-query API."""
