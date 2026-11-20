@@ -7,7 +7,12 @@ from typing import Protocol
 from turbopuffer.types import Filter, NamespaceQueryResponse, RankBy, Row
 
 
-TITLE_WEIGHT = 2.0
+TITLE_WEIGHT_BY_LOCALE = {
+    "us": 64.0,
+    "jp": 8.0,
+    "es": 32.0,
+}
+DEFAULT_TITLE_WEIGHT = 16.0
 DESCRIPTION_WEIGHT = 1.0
 
 
@@ -24,12 +29,13 @@ class QueryNamespace(Protocol):
     ) -> NamespaceQueryResponse: ...
 
 
-def rank_by(query_text: str) -> RankBy:
-    """Build a BM25 score with title weighted twice as much as description."""
+def rank_by(query_text: str, locale: str | None = None) -> RankBy:
+    """Build a locale-tuned title/description weighted BM25 score."""
+    title_weight = TITLE_WEIGHT_BY_LOCALE.get(locale or "", DEFAULT_TITLE_WEIGHT)
     return (
         "Sum",
         (
-            ("Product", TITLE_WEIGHT, ("title", "BM25", query_text)),
+            ("Product", title_weight, ("title", "BM25", query_text)),
             ("Product", DESCRIPTION_WEIGHT, ("description", "BM25", query_text)),
         ),
     )
@@ -41,7 +47,7 @@ def query(
     locale: str,
     top_k: int = 10,
 ) -> list[Row]:
-    """Issue one title/description weighted query, restricted to its locale."""
+    """Issue one weighted product-text query, restricted to its locale."""
     if not query_text.strip():
         raise ValueError("query_text must not be empty")
     if not locale.strip():
@@ -50,7 +56,7 @@ def query(
         raise ValueError("top_k must be greater than zero")
 
     response = namespace.query(
-        rank_by=rank_by(query_text),
+        rank_by=rank_by(query_text, locale),
         filters=("locale", "Eq", locale),
         top_k=top_k,
         include_attributes=["title", "description", "locale"],

@@ -40,6 +40,10 @@ uv run query --queries queries.csv --output results.csv
 ```
 
 The batch command assigns query IDs (`q1`, `q2`, ...), applies the locale filter,
-and writes ranked document IDs and scores. Queries combine BM25 title and
-description scores, with title weighted twice as heavily. Queries with no hits
-are emitted with the `-1,-1,-1` sentinel row.
+and writes ranked document IDs and scores. Queries combine BM25 scores from
+title and description, with locale-specific title weights tuned using referee
+training feedback (`us`: 64, `jp`: 8, `es`: 32; description: 1). On a single
+1,000-query ESCI training split, these weights improved NDCG from 0.2917 to
+0.3407. Stronger title weighting helped exact brand/model matches; ambiguous
+queries and searches with specific attributes remain opportunities for further
+improvement. Queries with no hits are emitted with the `-1,-1,-1` sentinel row.
