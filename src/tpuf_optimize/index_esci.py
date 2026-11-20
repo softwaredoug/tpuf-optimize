@@ -8,7 +8,7 @@ import os
 from turbopuffer import Turbopuffer
 from tqdm import tqdm
 
-from tpuf_optimize.indexer import Indexer
+from tpuf_optimize.indexer import DEFAULT_BATCH_SIZE, Indexer
 from tpuf_optimize.strategy import TPufStrategy
 
 
@@ -19,7 +19,7 @@ def _parser() -> argparse.ArgumentParser:
         "--region",
         default=os.environ.get("TURBOPUFFER_REGION", "gcp-us-central1"),
     )
-    parser.add_argument("--batch-size", type=int, default=1000)
+    parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--limit", type=int)
     parser.add_argument(
         "--dry-run",

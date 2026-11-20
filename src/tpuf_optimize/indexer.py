@@ -11,6 +11,9 @@ from turbopuffer.types import AttributeSchemaParam, RowParam
 from tpuf_optimize.strategy import TPufStrategy
 
 
+DEFAULT_BATCH_SIZE = 5000
+
+
 class NamespaceWriter(Protocol):
     """The namespace write surface required by Indexer."""
 
@@ -26,7 +29,10 @@ class Indexer:
     """Batch strategy-produced documents into namespace writes."""
 
     def __init__(
-        self, namespace: NamespaceWriter, strategy: TPufStrategy, batch_size: int = 1000
+        self,
+        namespace: NamespaceWriter,
+        strategy: TPufStrategy,
+        batch_size: int = DEFAULT_BATCH_SIZE,
     ) -> None:
         if batch_size < 1:
             raise ValueError("batch_size must be greater than zero")
