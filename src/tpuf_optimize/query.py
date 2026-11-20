@@ -8,6 +8,7 @@ from turbopuffer.types import Filter, NamespaceQueryResponse, RankBy, Row
 
 
 TITLE_WEIGHT = 6.0
+DESCRIPTION_WEIGHT = 0.25
 
 
 class QueryNamespace(Protocol):
@@ -24,8 +25,14 @@ class QueryNamespace(Protocol):
 
 
 def rank_by(query_text: str) -> RankBy:
-    """Build a BM25 score using only the title field."""
-    return ("Product", TITLE_WEIGHT, ("title", "BM25", query_text))
+    """Take the maximum weighted BM25 score from title and description."""
+    return (
+        "Max",
+        (
+            ("Product", TITLE_WEIGHT, ("title", "BM25", query_text)),
+            ("Product", DESCRIPTION_WEIGHT, ("description", "BM25", query_text)),
+        ),
+    )
 
 
 def query(
@@ -34,7 +41,7 @@ def query(
     locale: str,
     top_k: int = 10,
 ) -> list[Row]:
-    """Issue one title-only query, restricted to its locale."""
+    """Issue one weighted title/description query, restricted to its locale."""
     if not query_text.strip():
         raise ValueError("query_text must not be empty")
     if not locale.strip():
