@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.15,<3.16"
 dependencies = [
     "pandas>=2.2,<3",
+    "tqdm>=4.70,<5",
     "turbopuffer>=2.10.2",
     "tpuf-helpers @ git+https://github.com/softwaredoug/tpuf-helpers.git@4723eadcc1b79b16e1b2f8c020651bc9a46b5a41",
     "cheat_at_search @ git+https://github.com/softwaredoug/cheat-at-search.git@f1ff0cc06cc0ecd0feff2da7a1bf087daf3faede",

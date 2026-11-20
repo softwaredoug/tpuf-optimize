@@ -1682,6 +1682,7 @@ dependencies = [
     { name = "cheat-at-search" },
     { name = "pandas" },
     { name = "tpuf-helpers" },
+    { name = "tqdm" },
     { name = "turbopuffer" },
 ]
 
@@ -1697,6 +1698,7 @@ requires-dist = [
     { name = "cheat-at-search", git = "https://github.com/softwaredoug/cheat-at-search.git?rev=f1ff0cc06cc0ecd0feff2da7a1bf087daf3faede" },
     { name = "pandas", specifier = ">=2.2,<3" },
     { name = "tpuf-helpers", git = "https://github.com/softwaredoug/tpuf-helpers.git?rev=4723eadcc1b79b16e1b2f8c020651bc9a46b5a41" },
+    { name = "tqdm", specifier = ">=4.70,<5" },
     { name = "turbopuffer", specifier = ">=2.10.2" },
 ]
 

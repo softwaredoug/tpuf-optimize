@@ -12,6 +12,7 @@ from typing import Any, cast
 import pandas as pd
 from turbopuffer import Turbopuffer
 from turbopuffer.types import AttributeSchemaParam, RowParam
+from tqdm import tqdm
 
 
 TEXT_COLUMNS = {
@@ -107,21 +108,30 @@ def main(argv: list[str] | None = None) -> int:
     from cheat_at_search.esci_data import corpus  # type: ignore[attr-defined]
 
     rows = _document_rows(corpus, args.limit)
-    if args.dry_run:
-        count = sum(1 for _ in rows)
-        print(f"Would index {count:,} documents into {args.namespace!r}.")
-        return 0
+    total_rows = len(corpus)
+    if args.limit is not None:
+        total_rows = min(args.limit, total_rows)
 
-    total = 0
-    with Turbopuffer(region=args.region) as client:
-        namespace = client.namespace(args.namespace)
-        for batch in _batches(rows, args.batch_size):
-            namespace.write(
-                upsert_rows=cast(Iterable[RowParam], batch),
-                schema=FULL_TEXT_SCHEMA,
-            )
-            total += len(batch)
-            print(f"Indexed {total:,} documents...", flush=True)
+    description = "Counting ESCI" if args.dry_run else "Indexing ESCI"
+    with tqdm(total=total_rows, desc=description, unit="doc") as progress:
+        if args.dry_run:
+            count = 0
+            for _ in rows:
+                count += 1
+                progress.update(1)
+            print(f"Would index {count:,} documents into {args.namespace!r}.")
+            return 0
+
+        total = 0
+        with Turbopuffer(region=args.region) as client:
+            namespace = client.namespace(args.namespace)
+            for batch in _batches(rows, args.batch_size):
+                namespace.write(
+                    upsert_rows=cast(Iterable[RowParam], batch),
+                    schema=FULL_TEXT_SCHEMA,
+                )
+                total += len(batch)
+                progress.update(len(batch))
 
     print(f"Indexed {total:,} documents into {args.namespace!r}.")
     return 0
