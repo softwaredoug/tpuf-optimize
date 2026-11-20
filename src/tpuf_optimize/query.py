@@ -8,7 +8,7 @@ from turbopuffer.types import Filter, NamespaceQueryResponse, RankBy, Row
 
 
 TITLE_WEIGHT = 6.0
-PHRASE_WEIGHT = 4.0
+PHRASE_WEIGHT = 6.0
 
 
 class QueryNamespace(Protocol):
