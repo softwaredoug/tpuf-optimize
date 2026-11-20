@@ -22,6 +22,7 @@ TEXT_COLUMNS = {
     "color": "product_color",
     "category": "product_category",
 }
+DOCUMENT_COLUMNS = {**TEXT_COLUMNS, "locale": "product_locale"}
 FULL_TEXT_SCHEMA: dict[str, AttributeSchemaParam] = {
     name: {"type": "string", "full_text_search": True}
     for name in TEXT_COLUMNS
@@ -43,10 +44,12 @@ def _document_rows(
     id_column = "doc_id" if "doc_id" in corpus.columns else "product_id"
     selected_columns = [id_column]
     selected_columns.extend(
-        source for source in TEXT_COLUMNS.values() if source in corpus.columns
+        source for source in DOCUMENT_COLUMNS.values() if source in corpus.columns
     )
     output_names = {
-        source: name for name, source in TEXT_COLUMNS.items() if source in corpus.columns
+        source: name
+        for name, source in DOCUMENT_COLUMNS.items()
+        if source in corpus.columns
     }
 
     emitted = 0

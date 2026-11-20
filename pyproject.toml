@@ -13,6 +13,7 @@ dependencies = [
 
 [project.scripts]
 index-esci = "tpuf_optimize.index_esci:main"
+query = "tpuf_optimize.query_batch:main"
 
 [dependency-groups]
 dev = [
