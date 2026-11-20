@@ -5,19 +5,12 @@ from __future__ import annotations
 import argparse
 import csv
 import os
-from dataclasses import dataclass
 from pathlib import Path
 
 from turbopuffer import Turbopuffer
 
-from tpuf_optimize.query import QueryNamespace, query
-
-
-@dataclass(frozen=True)
-class SearchRequest:
-    query_id: str
-    text: str
-    locale: str
+from tpuf_optimize.searcher import SearchRequest, Searcher
+from tpuf_optimize.strategy import TPufStrategy
 
 
 def _read_queries(path: Path) -> list[SearchRequest]:
@@ -47,15 +40,14 @@ def _read_queries(path: Path) -> list[SearchRequest]:
 def _write_results(
     output_path: Path,
     requests: list[SearchRequest],
-    namespace: QueryNamespace,
+    searcher: Searcher,
     top_k: int,
 ) -> None:
     with output_path.open("w", newline="", encoding="utf-8") as output_file:
         writer = csv.writer(output_file)
         writer.writerow(["query_id", "doc_id", "rank", "score"])
 
-        for request in requests:
-            rows = query(namespace, request.text, request.locale, top_k)
+        for request, rows in searcher.search(requests, top_k):
             if not rows:
                 writer.writerow([request.query_id, -1, -1, -1])
                 continue
@@ -87,6 +79,7 @@ def _parser() -> argparse.ArgumentParser:
         default=os.environ.get("TURBOPUFFER_REGION", "gcp-us-central1"),
     )
     parser.add_argument("--top-k", type=int, default=10)
+    parser.add_argument("--batch-size", type=int, default=100)
     return parser
 
 
@@ -95,6 +88,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.top_k < 1:
         parser.error("--top-k must be greater than zero")
+    if args.batch_size < 1:
+        parser.error("--batch-size must be greater than zero")
     if not os.environ.get("TURBOPUFFER_API_KEY"):
         parser.error("Set TURBOPUFFER_API_KEY before querying.")
 
@@ -102,7 +97,8 @@ def main(argv: list[str] | None = None) -> int:
         requests = _read_queries(args.queries)
         with Turbopuffer(region=args.region) as client:
             namespace = client.namespace(args.namespace)
-            _write_results(args.output, requests, namespace, args.top_k)
+            searcher = Searcher(namespace, TPufStrategy(), args.batch_size)
+            _write_results(args.output, requests, searcher, args.top_k)
     except (OSError, ValueError) as error:
         parser.error(str(error))
 
