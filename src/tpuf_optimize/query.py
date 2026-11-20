@@ -9,6 +9,10 @@ from turbopuffer.types import Filter, NamespaceQueryResponse, RankBy, Row
 
 TITLE_WEIGHT = 2.0
 DESCRIPTION_WEIGHT = 1.0
+BRAND_WEIGHT = 0.5
+BULLET_POINT_WEIGHT = 0.5
+CATEGORY_WEIGHT = 0.25
+COLOR_WEIGHT = 0.25
 
 
 class QueryNamespace(Protocol):
@@ -25,12 +29,16 @@ class QueryNamespace(Protocol):
 
 
 def rank_by(query_text: str) -> RankBy:
-    """Build a BM25 score with title weighted twice as much as description."""
+    """Build a weighted BM25 score across product text attributes."""
     return (
         "Sum",
         (
             ("Product", TITLE_WEIGHT, ("title", "BM25", query_text)),
             ("Product", DESCRIPTION_WEIGHT, ("description", "BM25", query_text)),
+            ("Product", BRAND_WEIGHT, ("brand", "BM25", query_text)),
+            ("Product", BULLET_POINT_WEIGHT, ("bullet_point", "BM25", query_text)),
+            ("Product", CATEGORY_WEIGHT, ("category", "BM25", query_text)),
+            ("Product", COLOR_WEIGHT, ("color", "BM25", query_text)),
         ),
     )
 
@@ -41,7 +49,7 @@ def query(
     locale: str,
     top_k: int = 10,
 ) -> list[Row]:
-    """Issue one title/description weighted query, restricted to its locale."""
+    """Issue one weighted product-text query, restricted to its locale."""
     if not query_text.strip():
         raise ValueError("query_text must not be empty")
     if not locale.strip():
