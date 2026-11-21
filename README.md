@@ -59,10 +59,19 @@ Hybrid search retrieves up to 100 candidates from each retriever.
 The default fusion weights are 2:1 (dense:lexical) with an RRF constant of 10;
 `--dense-weight`, `--lexical-weight`, and `--rrf-constant` can override them.
 Use `--lexical-only` to disable hybrid search.
+Experimental exact-title candidate boosts can be compared with
+`--title-signal phrase` (adjacent query tokens) or
+`--title-signal all_tokens` (all query tokens in any order); both use the
+existing locale-aware title analyzer and a low-weight third RRF list.
 
 ```sh
 uv run query --queries queries.csv --output results.csv \
   --dense-weight 2 --lexical-weight 1
+```
+
+```sh
+uv run query --queries queries.csv --output results.csv \
+  --title-signal phrase --title-signal-weight 0.5
 ```
 
 ## Search architecture

@@ -65,7 +65,14 @@ class Searcher:
         """Yield each request with its rows, issuing one API call per batch."""
         iterator = iter(requests)
         hybrid = getattr(self.strategy, "hybrid_weights", None)
-        request_limit = min(self.batch_size, 8 if hybrid is not None else 16)
+        queries_per_request = 1
+        if hybrid is not None:
+            queries_per_request = (
+                3
+                if getattr(self.strategy, "title_signal", None) is not None
+                else 2
+            )
+        request_limit = min(self.batch_size, 16 // queries_per_request)
         while request_batch := list(itertools.islice(iterator, request_limit)):
             if hybrid is None:
                 query_groups = [
@@ -93,9 +100,12 @@ class Searcher:
                 if hybrid is None:
                     yield request, rows[0]
                 else:
+                    weights = hybrid
+                    if getattr(self.strategy, "title_signal", None) is not None:
+                        weights = (*hybrid, self.strategy.title_signal_weight)
                     yield request, self.strategy.reciprocal_rank_fusion(
                         rows,
-                        weights=hybrid,
+                        weights=weights,
                         rank_constant=self.strategy.rank_constant,
                         top_k=top_k,
                     )

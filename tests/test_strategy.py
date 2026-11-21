@@ -140,6 +140,33 @@ class TPufStrategyTests(unittest.TestCase):
         self.assertIn("title__word_v4__en__stem_stop", str(lexical_query["rank_by"]))
         self.assertEqual(strategy.hybrid_weights, (1.0, 2.0))
 
+    def test_phrase_signal_adds_title_sequence_clause(self) -> None:
+        strategy = TPufStrategy(title_signal="phrase", title_signal_weight=0.25)
+        queries = strategy.hybrid_queries("blue shoe", "us", top_k=10)
+
+        self.assertEqual(len(queries), 3)
+        self.assertEqual(
+            queries[2]["rank_by"],
+            ("title__word_v4__en__stem_stop", "BM25", "blue shoe"),
+        )
+        self.assertIn("ContainsTokenSequence", str(queries[2]["filters"]))
+
+    def test_all_tokens_signal_adds_locale_title_query(self) -> None:
+        strategy = TPufStrategy(title_signal="all_tokens", title_signal_weight=0.25)
+        queries = strategy.hybrid_queries("blue shoe", "en-US", top_k=10)
+
+        self.assertEqual(len(queries), 3)
+        self.assertEqual(
+            queries[2]["rank_by"],
+            (
+                "title__word_v4__en__stem_stop",
+                "BM25",
+                "blue shoe",
+            ),
+        )
+        self.assertIn("ContainsAllTokens", str(queries[2]["filters"]))
+        self.assertEqual(queries[2]["top_k"], 100)
+
     def test_hybrid_is_the_default_query_strategy(self) -> None:
         self.assertEqual(TPufStrategy().hybrid_weights, (2.0, 1.0))
         self.assertIsNone(TPufStrategy(hybrid_weights=None).hybrid_weights)

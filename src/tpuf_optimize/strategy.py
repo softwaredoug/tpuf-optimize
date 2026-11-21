@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import unicodedata
 from collections.abc import Iterable, Iterator
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import pandas as pd
 from turbopuffer.types import (
@@ -29,6 +29,8 @@ class TPufStrategy:
         self,
         hybrid_weights: tuple[float, float] | None = (2.0, 1.0),
         rank_constant: int = 10,
+        title_signal: Literal["phrase", "all_tokens"] | None = None,
+        title_signal_weight: float = 0.5,
     ) -> None:
         if hybrid_weights is not None and (
             len(hybrid_weights) != 2
@@ -44,8 +46,14 @@ class TPufStrategy:
             )
         if rank_constant < 0:
             raise ValueError("rank_constant must not be negative")
+        if not math.isfinite(title_signal_weight) or title_signal_weight < 0:
+            raise ValueError("title_signal_weight must be finite and non-negative")
+        if title_signal is not None and hybrid_weights is None:
+            raise ValueError("title signals require hybrid search")
         self.hybrid_weights = hybrid_weights
         self.rank_constant = rank_constant
+        self.title_signal: Literal["phrase", "all_tokens"] | None = title_signal
+        self.title_signal_weight = title_signal_weight
 
     EMBEDDING_MODEL = "voyage/voyage-4"
     EMBEDDING_DIMS = 1024
@@ -352,8 +360,8 @@ class TPufStrategy:
 
     def hybrid_queries(
         self, query_text: str, locale: str, top_k: int
-    ) -> tuple[Query, Query]:
-        """Return Voyage passage ANN and locale-specific lexical candidates."""
+    ) -> tuple[Query, ...]:
+        """Return Voyage, lexical, and optional exact title candidates."""
         locale = self.normalize_locale(locale)
         candidate_k = max(top_k, self.HYBRID_CANDIDATE_DEPTH)
         lexical_query = self.query(query_text, locale, candidate_k)
@@ -367,7 +375,42 @@ class TPufStrategy:
             "top_k": candidate_k,
             "include_attributes": ["title", "description", "locale"],
         }
-        return vector_query, lexical_query
+        queries: list[Query] = [vector_query, lexical_query]
+        if self.title_signal is not None:
+            suffix = self._locale_analyzer_suffix(locale)
+            operator = (
+                "ContainsTokenSequence"
+                if self.title_signal == "phrase"
+                else "ContainsAllTokens"
+            )
+            queries.append(
+                {
+                    "rank_by": (
+                        f"title__{suffix}",
+                        "BM25",
+                        query_text,
+                    ),
+                    "filters": (
+                        "And",
+                        (
+                            ("locale", "Eq", locale),
+                            (f"title__{suffix}", operator, query_text),
+                        ),
+                    ),
+                    "top_k": candidate_k,
+                    "include_attributes": ["title", "description", "locale"],
+                }
+            )
+        return tuple(queries)
+
+    def _locale_analyzer_suffix(self, locale: str) -> str:
+        """Return the indexed analyzer suffix used for a normalized locale."""
+        locale_analyzer = self.LOCALE_ANALYZERS.get(locale)
+        return (
+            locale_analyzer[0]
+            if locale_analyzer is not None
+            else self.DEFAULT_ANALYZER
+        )
 
     @staticmethod
     def reciprocal_rank_fusion(

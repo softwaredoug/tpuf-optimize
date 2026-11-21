@@ -88,6 +88,12 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--dense-weight", type=float, default=2.0)
     parser.add_argument("--lexical-weight", type=float, default=1.0)
     parser.add_argument("--rrf-constant", type=int, default=10)
+    parser.add_argument(
+        "--title-signal",
+        choices=("phrase", "all_tokens"),
+        help="Add a phrase boost to BM25 or a low-weight title-token candidate list.",
+    )
+    parser.add_argument("--title-signal-weight", type=float, default=0.5)
     return parser
 
 
@@ -119,6 +125,8 @@ def main(argv: list[str] | None = None) -> int:
             strategy = TPufStrategy(
                 hybrid_weights=hybrid_weights,
                 rank_constant=args.rrf_constant,
+                title_signal=args.title_signal,
+                title_signal_weight=args.title_signal_weight,
             )
             searcher = Searcher(namespace, strategy, args.batch_size)
             _write_results(args.output, requests, searcher, args.top_k)

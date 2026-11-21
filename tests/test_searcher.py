@@ -61,6 +61,36 @@ class SearcherTests(unittest.TestCase):
         self.assertEqual(len(results), 9)
         self.assertEqual(namespace.call_sizes, [16, 2])
 
+    def test_all_tokens_signal_fuses_three_candidate_lists(self) -> None:
+        namespace = MemoryNamespace()
+        strategy = TPufStrategy(
+            title_signal="all_tokens",
+            title_signal_weight=0.5,
+        )
+
+        results = list(
+            Searcher(namespace, strategy, batch_size=100).search(
+                [SearchRequest("q1", "blue shoe", "en-US")],
+                top_k=5,
+            )
+        )
+
+        self.assertEqual(len(namespace.queries), 3)
+        self.assertEqual(len(results), 1)
+        self.assertEqual([str(row.id) for row in results[0][1]], ["doc-0", "doc-1", "doc-2"])
+
+    def test_all_tokens_batches_respect_multi_query_limit(self) -> None:
+        namespace = MemoryNamespace()
+        strategy = TPufStrategy(title_signal="all_tokens")
+        requests = [
+            SearchRequest(f"q{i}", "product query", "us") for i in range(6)
+        ]
+
+        results = list(Searcher(namespace, strategy).search(requests, top_k=5))
+
+        self.assertEqual(len(results), 6)
+        self.assertEqual(namespace.call_sizes, [15, 3])
+
 
 if __name__ == "__main__":
     unittest.main()
