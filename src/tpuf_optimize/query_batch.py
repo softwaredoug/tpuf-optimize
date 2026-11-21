@@ -5,9 +5,12 @@ from __future__ import annotations
 import argparse
 import csv
 import os
+from collections.abc import Iterable
 from pathlib import Path
+from typing import Any
 
 from turbopuffer import Turbopuffer
+from turbopuffer.types import Row
 
 from tpuf_optimize.searcher import SearchRequest, Searcher
 from tpuf_optimize.strategy import TPufStrategy
@@ -48,25 +51,56 @@ def _write_results(
         writer.writerow(["query_id", "doc_id", "rank", "score"])
 
         for request, rows in searcher.search(requests, top_k):
-            if not rows:
-                writer.writerow([request.query_id, -1, -1, -1])
-                continue
+            _write_query_rows(writer, request, rows)
 
-            seen_document_ids: set[str] = set()
-            for rank, result in enumerate(rows, start=1):
-                document_id = str(result.id)
-                if document_id in seen_document_ids:
-                    raise ValueError(
-                        f"Duplicate document {document_id!r} in results for "
-                        f"{request.query_id}"
-                    )
-                seen_document_ids.add(document_id)
-                score = result["$dist"]
-                if not isinstance(score, (float, int)):
-                    raise ValueError(
-                        f"Missing numeric BM25 score for document {document_id!r}"
-                    )
-                writer.writerow([request.query_id, document_id, rank, score])
+
+def _write_query_rows(
+    writer: Any, request: SearchRequest, rows: Iterable[Row]
+) -> None:
+    if not rows:
+        writer.writerow([request.query_id, -1, -1, -1])
+        return
+
+    seen_document_ids: set[str] = set()
+    for rank, result in enumerate(rows, start=1):
+        document_id = str(result.id)
+        if document_id in seen_document_ids:
+            raise ValueError(
+                f"Duplicate document {document_id!r} in results for "
+                f"{request.query_id}"
+            )
+        seen_document_ids.add(document_id)
+        score = result["$dist"]
+        if not isinstance(score, (float, int)):
+            raise ValueError(
+                f"Missing numeric BM25 score for document {document_id!r}"
+            )
+        writer.writerow([request.query_id, document_id, rank, score])
+
+
+def _write_counterfactual_arms(
+    treatment_path: Path,
+    control_path: Path,
+    requests: list[SearchRequest],
+    searcher: Searcher,
+    top_k: int,
+) -> None:
+    if treatment_path.resolve() == control_path.resolve():
+        raise ValueError("treatment and control output paths must differ")
+    with (
+        treatment_path.open("w", newline="", encoding="utf-8") as treatment_file,
+        control_path.open("w", newline="", encoding="utf-8") as control_file,
+    ):
+        treatment_writer = csv.writer(treatment_file)
+        control_writer = csv.writer(control_file)
+        header = ["query_id", "doc_id", "rank", "score"]
+        treatment_writer.writerow(header)
+        control_writer.writerow(header)
+        for arms in searcher.search_counterfactual_arms(requests, top_k):
+            _write_query_rows(
+                treatment_writer, arms.request, arms.treatment_rows
+            )
+            _write_query_rows(control_writer, arms.request, arms.control_rows)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -80,6 +114,14 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--top-k", type=int, default=10)
     parser.add_argument("--batch-size", type=int, default=100)
+    parser.add_argument(
+        "--counterfactual-control",
+        type=Path,
+        help=(
+            "Also write the matched original-ranking control here and write "
+            "the counterfactual treatment to --output."
+        ),
+    )
     parser.add_argument(
         "--lexical-only",
         action="store_true",
@@ -121,11 +163,22 @@ def main(argv: list[str] | None = None) -> int:
                 rank_constant=args.rrf_constant,
             )
             searcher = Searcher(namespace, strategy, args.batch_size)
-            _write_results(args.output, requests, searcher, args.top_k)
+            if args.counterfactual_control:
+                _write_counterfactual_arms(
+                    args.output,
+                    args.counterfactual_control,
+                    requests,
+                    searcher,
+                    args.top_k,
+                )
+            else:
+                _write_results(args.output, requests, searcher, args.top_k)
     except (OSError, ValueError) as error:
         parser.error(str(error))
 
     print(f"Wrote results for {len(requests)} queries to {args.output}.")
+    if args.counterfactual_control:
+        print(f"Wrote matched control results to {args.counterfactual_control}.")
     return 0
 
 

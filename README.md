@@ -65,6 +65,25 @@ uv run query --queries queries.csv --output results.csv \
   --dense-weight 2 --lexical-weight 1
 ```
 
+### Counterfactual token-probe arm
+
+For a paired experiment, pass `--counterfactual-control control.csv`. The usual
+`--output` is then the treatment: it retains only the original top-k candidates
+and may softly reorder candidates that lack one selected identifier or
+partially-covered attribute token. `control.csv` contains the same candidates
+in their original hybrid/fused order, without using probe evidence.
+
+Eligible queries issue one additional logical query. It filters to the original
+candidate IDs, orders by ID so zero-score candidates remain present, and uses
+`compute_attributes` to evaluate both the original and token-ablated weighted
+title/description BM25 on those same candidates. Thus the rank-lift signal
+compares true lexical leave-one-out scores, rather than a separately retrieved
+list or the fused score. For default hybrid search, the baseline uses two
+logical query subrequests (dense and lexical); the counterfactual adds at most
+one lexical subrequest, for a maximum of three logical query subrequests per
+eligible query. Ineligible queries use only the baseline pair. The probe adds
+no embedding query.
+
 ## Search architecture
 
 `TPufStrategy` owns the ESCI document mapping, namespace schema, and query

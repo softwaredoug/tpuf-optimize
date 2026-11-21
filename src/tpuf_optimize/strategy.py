@@ -407,7 +407,14 @@ class TPufStrategy:
             )[:top_k]
         ]
 
-    def query(self, query_text: str, locale: str, top_k: int) -> Query:
+    def query(
+        self,
+        query_text: str,
+        locale: str,
+        top_k: int,
+        *,
+        include_counterfactual_attributes: bool = False,
+    ) -> Query:
         """Build one locale-filtered query for Turbopuffer's multi-query API."""
         if not query_text.strip():
             raise ValueError("query_text must not be empty")
@@ -416,9 +423,87 @@ class TPufStrategy:
         if top_k < 1:
             raise ValueError("top_k must be greater than zero")
         locale = self.normalize_locale(locale)
+        attributes = ["title", "description", "locale"]
+        if include_counterfactual_attributes:
+            attributes.extend(["brand", "color", "category"])
         return {
             "rank_by": self.rank_by(query_text, locale),
             "filters": ("locale", "Eq", locale),
             "top_k": top_k,
-            "include_attributes": ["title", "description", "locale"],
+            "include_attributes": attributes,
         }
+
+    def counterfactual_query(
+        self,
+        original_query: str,
+        ablated_query: str,
+        locale: str,
+        candidate_ids: list[str],
+    ) -> Query:
+        """Compute ablated weighted BM25 for precisely the original candidates.
+
+        Ordering by ID ensures that a candidate with zero ablated score is
+        still returned and receives a computed attribute.
+        """
+        if not original_query.strip() or not ablated_query.strip():
+            raise ValueError("original and ablated queries must not be empty")
+        if not locale.strip():
+            raise ValueError("locale must not be empty")
+        if not candidate_ids:
+            raise ValueError("candidate_ids must not be empty")
+
+        locale = self.normalize_locale(locale)
+        suffix = self.LOCALE_ANALYZERS.get(
+            locale, (self.DEFAULT_ANALYZER, {})
+        )[0]
+        title_field = f"title__{suffix}"
+        description_field = f"description__{suffix}"
+        original_expression = (
+            "Sum",
+            (
+                (
+                    "Product",
+                    self.TITLE_WEIGHT,
+                    (title_field, "BM25", original_query),
+                ),
+                (
+                    "Product",
+                    self.DESCRIPTION_WEIGHT,
+                    (description_field, "BM25", original_query),
+                ),
+            ),
+        )
+        counterfactual_expression = (
+            "Sum",
+            (
+                (
+                    "Product",
+                    self.TITLE_WEIGHT,
+                    (title_field, "BM25", ablated_query),
+                ),
+                (
+                    "Product",
+                    self.DESCRIPTION_WEIGHT,
+                    (description_field, "BM25", ablated_query),
+                ),
+            ),
+        )
+        return cast(
+            Query,
+            {
+                "rank_by": ("id", "asc"),
+                "filters": (
+                    "And",
+                    (
+                        ("locale", "Eq", locale),
+                        ("id", "In", candidate_ids),
+                    ),
+                ),
+                "top_k": len(candidate_ids),
+                "include_attributes": ["id"],
+                "compute_attributes": {
+                    "original_lexical_score": original_expression,
+                    "counterfactual_score": counterfactual_expression,
+                },
+            },
+        )
