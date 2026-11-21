@@ -126,6 +126,20 @@
       "voyage": 3.2737799999999996e-07,
       "bm25": 0.0
     },
+    "variant_cost_per_run_usd": {
+      "typed": 0.0016368899999999998,
+      "computed": 0.0016368899999999998,
+      "learned": 0.0016368899999999998,
+      "identifier": 0.0016368899999999998,
+      "product": 0.0016368899999999998,
+      "minmax": 0.0016368899999999998,
+      "hybrid": 0.0016368899999999998,
+      "four": 0.0016368899999999998,
+      "fuzzy": 0.0,
+      "passage": 0.0,
+      "voyage": 0.0016368899999999998,
+      "bm25": 0.0
+    },
     "excludes": [
       "Turbopuffer database/storage/query charges",
       "local CPU reranker costs"

@@ -209,12 +209,23 @@ def run(args, state):
             )
             for variant in VARIANTS
         },
+        "variant_cost_per_run_usd": {
+            variant.slug: (
+                voyage4_embed_usd_per_query * COUNT
+                if variant.uses_voyage4_query_embedding else 0.0
+            )
+            for variant in VARIANTS
+        },
         "excludes": [
             "Turbopuffer database/storage/query charges",
             "local CPU reranker costs",
         ],
     }
-    if "cost_estimates" in summary and summary["cost_estimates"] != cost_estimates:
+    previous_costs = summary.get("cost_estimates", {})
+    if any(
+        key not in cost_estimates or cost_estimates[key] != value
+        for key, value in previous_costs.items()
+    ):
         raise ValueError("Benchmark cost-estimate basis changed")
     summary["cost_estimates"] = cost_estimates
     if any(summary[field] != value for field, value in cohort.items()):
