@@ -1,7 +1,7 @@
 """Deterministic, bounded reranking for ESCI hybrid retrieval candidates.
 
 The candidate pool is the union of dense and lexical results. Reciprocal-rank
-fusion (lexical: dense = 2:1) remains the dominant signal; title and explicit
+fusion (dense: lexical = 2:1) remains the dominant signal; title and explicit
 product-specification evidence only make a small, bounded adjustment.
 """
 
@@ -267,16 +267,18 @@ def rerank_candidates(
     lexical: Sequence[Mapping[str, Any]],
     *,
     top_k: int | None = None,
-    lexical_weight: float = 2.0,
-    dense_weight: float = 1.0,
+    lexical_weight: float = 1.0,
+    dense_weight: float = 2.0,
     rank_constant: int = 60,
     max_adjustment: float = 0.012,
 ) -> list[dict[str, Any]]:
     """Fuse a dense/lexical union and apply bounded product-title evidence.
 
     The input sequences are ordered by their retrieval ranks. Each returned
-    result contains merged source attributes, the deterministic fused ``score``,
-    and its ``rrf_score`` and ``rerank_adjustment`` for diagnostics.
+    Dense and lexical ranks are fused with weights 2:1 respectively by default.
+    Each result contains merged attributes, deterministic fused ``score``,
+    and its ``rrf_score`` and ``rerank_adjustment`` for diagnostics. Set
+    ``max_adjustment=0`` to return the unmodified weighted-RRF ordering.
     """
     if not query_text.strip():
         raise ValueError("query_text must not be empty")

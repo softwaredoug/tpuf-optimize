@@ -59,3 +59,10 @@ with title weighted twice as heavily. Queries with no hits are emitted with the
 `TPufStrategy` owns the ESCI document mapping, namespace schema, and query
 construction. The outer `Indexer` and `Searcher` handle batched namespace I/O,
 so relevance experiments can focus on the strategy without changing the runners.
+
+`tpuf_optimize.product_rerank.rerank_candidates` is a pure reranker for an
+already-retrieved dense/lexical candidate union. Its default reciprocal-rank
+fusion weights are dense:lexical = 2:1; bounded title and explicit product
+specification signals adjust that baseline. Pass `max_adjustment=0` to inspect
+the unmodified weighted-RRF ranking. This helper does not issue retrieval or
+Turbopuffer requests.

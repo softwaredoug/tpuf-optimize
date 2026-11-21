@@ -8,7 +8,7 @@ from tpuf_optimize.product_rerank import rerank_candidates
 
 
 class ProductRerankTests(unittest.TestCase):
-    def test_uses_lexical_two_to_one_dense_rrf_as_base(self) -> None:
+    def test_uses_dense_two_to_one_lexical_rrf_as_base(self) -> None:
         results = rerank_candidates(
             "ordinary query",
             "us",
@@ -17,10 +17,39 @@ class ProductRerankTests(unittest.TestCase):
         )
 
         by_id = {row["doc_id"]: row for row in results}
-        self.assertAlmostEqual(by_id["a"]["rrf_score"], 2 / 62 + 1 / 61)
-        self.assertAlmostEqual(by_id["b"]["rrf_score"], 2 / 61 + 1 / 62)
+        self.assertAlmostEqual(by_id["a"]["rrf_score"], 2 / 61 + 1 / 62)
+        self.assertAlmostEqual(by_id["b"]["rrf_score"], 2 / 62 + 1 / 61)
         # Backend score scales are intentionally ignored; rank is the fusion input.
         self.assertEqual(len(results), 2)
+
+    def test_zero_adjustment_matches_dense_weighted_parent_not_inverted_weights(
+        self,
+    ) -> None:
+        dense = [{"doc_id": "dense-first"}, {"doc_id": "lexical-first"}]
+        lexical = [{"doc_id": "lexical-first"}, {"doc_id": "dense-first"}]
+
+        parent_order = rerank_candidates(
+            "plain query", "us", dense, lexical, max_adjustment=0
+        )
+        inverted_order = rerank_candidates(
+            "plain query",
+            "us",
+            dense,
+            lexical,
+            dense_weight=1,
+            lexical_weight=2,
+            max_adjustment=0,
+        )
+
+        self.assertEqual(
+            [row["doc_id"] for row in parent_order],
+            ["dense-first", "lexical-first"],
+        )
+        self.assertEqual(
+            [row["doc_id"] for row in inverted_order],
+            ["lexical-first", "dense-first"],
+        )
+        self.assertTrue(all(row["rerank_adjustment"] == 0 for row in parent_order))
 
     def test_title_order_coverage_and_proximity_help_exact_title(self) -> None:
         results = rerank_candidates(
