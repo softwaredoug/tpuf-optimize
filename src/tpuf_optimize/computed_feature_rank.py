@@ -43,6 +43,11 @@ COMPUTED_FEATURE_NAMES = (
     "title_full_coverage",
     "title_full_coverage_available",
 )
+PASSAGE_ARM_FEATURE_NAMES = (
+    "passage_arm_present",
+    "passage_arm_rank_rrf",
+    "passage_arm_score_z",
+)
 ENHANCED_FEATURE_NAMES = FEATURE_NAMES + COMPUTED_FEATURE_NAMES
 TYPED_FEATURE_NAMES = (
     "typed_product_match",
@@ -54,6 +59,18 @@ TYPED_ENHANCED_FEATURE_NAMES = ENHANCED_FEATURE_NAMES + TYPED_FEATURE_NAMES
 TYPED_NO_UNKNOWN_FEATURE_NAMES = TYPED_FEATURE_NAMES[:-1]
 TYPED_ENHANCED_NO_UNKNOWN_FEATURE_NAMES = (
     ENHANCED_FEATURE_NAMES + TYPED_NO_UNKNOWN_FEATURE_NAMES
+)
+TYPED_COMPUTED_NO_PASSAGE_FEATURE_NAMES = (
+    FEATURE_NAMES
+    + tuple(
+        name
+        for name in COMPUTED_FEATURE_NAMES
+        if not name.startswith("passage_bm25_")
+    )
+    + TYPED_NO_UNKNOWN_FEATURE_NAMES
+)
+PASSAGE_TYPED_COMPUTED_FEATURE_NAMES = (
+    TYPED_COMPUTED_NO_PASSAGE_FEATURE_NAMES + PASSAGE_ARM_FEATURE_NAMES
 )
 _TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
 _MODEL_RE = re.compile(
@@ -113,6 +130,8 @@ class Candidate:
     title_full_coverage: bool | None = None
     brand: str = ""
     color: str = ""
+    passage_rank: int | None = None
+    passage_score: float | None = None
 
 
 @dataclass(frozen=True)
@@ -151,6 +170,7 @@ class LinearRanker:
             list(TYPED_ENHANCED_FEATURE_NAMES),
             list(TYPED_ENHANCED_NO_UNKNOWN_FEATURE_NAMES),
             list(FEATURE_NAMES + TYPED_NO_UNKNOWN_FEATURE_NAMES),
+            list(PASSAGE_TYPED_COMPUTED_FEATURE_NAMES),
         )
         if names not in valid_names or not isinstance(raw_weights, list):
             raise ValueError("ranker artifact has an incompatible feature schema")
@@ -486,15 +506,32 @@ def feature_vectors(
     include_computed: bool = False,
     include_typed: bool = False,
     include_typed_unknown: bool = True,
+    include_passage_arm: bool = False,
 ) -> dict[str, tuple[float, ...]]:
     """Build per-query runtime features; no identifier or query identity enters."""
+    if include_passage_arm and not (
+        include_computed and include_typed and not include_typed_unknown
+    ):
+        raise ValueError(
+            "the passage arm requires typed/computed features without unknown state"
+        )
     candidates = group.candidates
     dense_z = _z_scores([candidate.dense_score for candidate in candidates])
     lexical_z = _z_scores([candidate.lexical_score for candidate in candidates])
+    computed_fields = (
+        ("title_bm25", "brand_bm25")
+        if include_passage_arm
+        else ("title_bm25", "passage_bm25", "brand_bm25")
+    )
     computed_values = [
         _z_scores([getattr(candidate, field) for candidate in candidates])
-        for field in ("title_bm25", "passage_bm25", "brand_bm25")
+        for field in computed_fields
     ]
+    passage_score_z = (
+        _z_scores([candidate.passage_score for candidate in candidates])
+        if include_passage_arm
+        else []
+    )
     typed_values = _typed_product_features(group) if include_typed else {}
     query_tokens = set(_TOKEN_RE.findall(group.query_text.casefold()))
     normalized_query = " ".join(_TOKEN_RE.findall(group.query_text.casefold()))
@@ -524,9 +561,7 @@ def feature_vectors(
         if include_computed:
             enriched = tuple(
                 value
-                for field_index, field in enumerate(
-                    ("title_bm25", "passage_bm25", "brand_bm25")
-                )
+                for field_index, field in enumerate(computed_fields)
                 for value in (
                     computed_values[field_index][index],
                     float(getattr(candidate, field) is not None),
@@ -540,6 +575,13 @@ def feature_vectors(
             typed = typed_values[candidate.doc_id]
             base = base + (
                 typed if include_typed_unknown else typed[:-1]
+            )
+        if include_passage_arm:
+            passage_rank = candidate.passage_rank
+            base = base + (
+                float(passage_rank is not None),
+                1.0 / (RRF_K + passage_rank) if passage_rank is not None else 0.0,
+                passage_score_z[index],
             )
         vectors[candidate.doc_id] = base
     return vectors
@@ -578,6 +620,7 @@ def _pair_examples(
     include_computed: bool = False,
     include_typed: bool = False,
     include_typed_unknown: bool = True,
+    include_passage_arm: bool = False,
 ) -> list[tuple[tuple[float, ...], float]]:
     """Create query-local preference pairs; optionally sample weak zero negatives.
 
@@ -596,6 +639,7 @@ def _pair_examples(
             include_computed=include_computed,
             include_typed=include_typed,
             include_typed_unknown=include_typed_unknown,
+            include_passage_arm=include_passage_arm,
         )
         observed = [
             (candidate.doc_id, labels[candidate.doc_id])
@@ -662,6 +706,7 @@ def fit_ranker(
     include_computed: bool = False,
     include_typed: bool = False,
     include_typed_unknown: bool = True,
+    include_passage_arm: bool = False,
 ) -> LinearRanker:
     """Fit a deterministic full-batch pairwise logistic linear ranker."""
     if epochs < 1 or learning_rate <= 0 or l2 < 0:
@@ -675,21 +720,25 @@ def fit_ranker(
         include_computed=include_computed,
         include_typed=include_typed,
         include_typed_unknown=include_typed_unknown,
+        include_passage_arm=include_passage_arm,
     )
     if not examples:
         raise ValueError("training data contains no unequal positive-grade pairs")
-    feature_names = (
-        (ENHANCED_FEATURE_NAMES if include_computed else FEATURE_NAMES)
-        + (
-            (
-                TYPED_FEATURE_NAMES
-                if include_typed_unknown
-                else TYPED_NO_UNKNOWN_FEATURE_NAMES
+    if include_passage_arm:
+        feature_names = PASSAGE_TYPED_COMPUTED_FEATURE_NAMES
+    else:
+        feature_names = (
+            (ENHANCED_FEATURE_NAMES if include_computed else FEATURE_NAMES)
+            + (
+                (
+                    TYPED_FEATURE_NAMES
+                    if include_typed_unknown
+                    else TYPED_NO_UNKNOWN_FEATURE_NAMES
+                )
+                if include_typed
+                else ()
             )
-            if include_typed
-            else ()
         )
-    )
     weights = [0.0] * len(feature_names)
     for _ in range(epochs):
         gradient = [l2 * weight for weight in weights]
@@ -718,6 +767,7 @@ def model_ranking(
         FEATURE_NAMES + TYPED_NO_UNKNOWN_FEATURE_NAMES,
         TYPED_ENHANCED_FEATURE_NAMES,
         TYPED_ENHANCED_NO_UNKNOWN_FEATURE_NAMES,
+        PASSAGE_TYPED_COMPUTED_FEATURE_NAMES,
     )
     if model.feature_names not in valid_schemas:
         raise ValueError("model has an incompatible feature schema")
@@ -725,18 +775,21 @@ def model_ranking(
         ENHANCED_FEATURE_NAMES,
         TYPED_ENHANCED_FEATURE_NAMES,
         TYPED_ENHANCED_NO_UNKNOWN_FEATURE_NAMES,
+        PASSAGE_TYPED_COMPUTED_FEATURE_NAMES,
     )
     include_typed = model.feature_names in (
         FEATURE_NAMES + TYPED_FEATURE_NAMES,
         FEATURE_NAMES + TYPED_NO_UNKNOWN_FEATURE_NAMES,
         TYPED_ENHANCED_FEATURE_NAMES,
         TYPED_ENHANCED_NO_UNKNOWN_FEATURE_NAMES,
+        PASSAGE_TYPED_COMPUTED_FEATURE_NAMES,
     )
     include_typed_unknown = (
         model.feature_names
         not in (
             FEATURE_NAMES + TYPED_NO_UNKNOWN_FEATURE_NAMES,
             TYPED_ENHANCED_NO_UNKNOWN_FEATURE_NAMES,
+            PASSAGE_TYPED_COMPUTED_FEATURE_NAMES,
         )
     )
     features = feature_vectors(
@@ -744,6 +797,9 @@ def model_ranking(
         include_computed=include_computed,
         include_typed=include_typed,
         include_typed_unknown=include_typed_unknown,
+        include_passage_arm=(
+            model.feature_names == PASSAGE_TYPED_COMPUTED_FEATURE_NAMES
+        ),
     )
     return sorted(
         (

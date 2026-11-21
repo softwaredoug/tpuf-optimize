@@ -1,0 +1,113 @@
+{
+  "candidate_coverage": {
+    "fit_original_union_pairs": 130441,
+    "fit_overlap_pairs": 46066,
+    "fit_passage_only_fraction_of_expanded_pool": 0.17015929969208846,
+    "fit_passage_only_pairs": 26747,
+    "fit_passage_only_unique_doc_ids": 26082,
+    "fit_passage_pairs": 72813,
+    "fit_query_mean_jaccard": 0.30930459602339944,
+    "id_filtered_metadata_request_bound": 100,
+    "passage_only_ids_max_per_query": 90,
+    "queries_with_passage_only_ids": 956,
+    "queries_without_passage_only_ids": 44,
+    "total_passage_only_ids": 35660
+  },
+  "expanded_fit_only_tuning": null,
+  "expanded_nominee_promising_on_training_validation": false,
+  "expanded_ranking_evaluated": false,
+  "expanded_validation_ndcg_at_10": null,
+  "fit_only_diagnostics": {
+    "judged_gain_ceiling_method": "fit-only candidate oracle over known positive grades; targets define IDCG; missing labels add no gain and are not training negatives",
+    "judged_gain_ceiling_ndcg_expanded": 0.8603448407946086,
+    "judged_gain_ceiling_ndcg_original_union": 0.8438443114911713,
+    "judged_top_target_recovery": {
+      "expanded_pool_target_hits": 5027,
+      "expanded_pool_target_recall": 0.6705348806189142,
+      "judged_top_targets": 7497,
+      "original_union_target_hits": 4836,
+      "original_union_target_recall": 0.6450580232092837,
+      "queries_with_target_in_expanded_pool": 720,
+      "queries_with_target_in_original_union": 717,
+      "targets_recovered_only_by_passage_arm": 191
+    },
+    "novel_debug_zero_or_unjudged_used_as_training_labels": 0,
+    "positive_novel_judgments": 389
+  },
+  "id_filtered_metadata_coverage": {
+    "metadata_id_coverage": 0.0,
+    "metadata_reads_completed": 0,
+    "metadata_reads_per_eligible_query_required": 956,
+    "passage_only_ids_requiring_metadata": 35660
+  },
+  "original_union_validation": {
+    "frozen_6508e87": {
+      "evaluated_queries": 250,
+      "pairwise_linear_ndcg": 0.43150115598468347,
+      "queries": 250,
+      "rrf_2_1_ndcg": 0.39567323943241567
+    },
+    "local_latency_ms_per_query": {
+      "frozen_p50_p95": {
+        "measurement": "local feature extraction + ranking; cached candidates; not end-to-end",
+        "median_ms_per_query": 4.2418125,
+        "p50_ms_per_query": 4.241542,
+        "p95_ms_per_query": 5.611292,
+        "queries": 250,
+        "repetitions_per_query": 3
+      },
+      "refit_p50_p95": {
+        "measurement": "local feature extraction + ranking; cached candidates; not end-to-end",
+        "median_ms_per_query": 4.205958,
+        "p50_ms_per_query": 4.202833,
+        "p95_ms_per_query": 5.608417,
+        "queries": 250,
+        "repetitions_per_query": 3
+      }
+    },
+    "paired_refit_minus_frozen_95_percent": {
+      "ci95_high": 0.0,
+      "ci95_low": 0.0,
+      "mean_delta": 0.0,
+      "paired_queries": 250
+    },
+    "same_recipe_refit_l2_selected_on_fit_only": 0.3,
+    "same_recipe_refit_original_union": {
+      "evaluated_queries": 250,
+      "pairwise_linear_ndcg": 0.43150115598468347,
+      "queries": 250,
+      "rrf_2_1_ndcg": 0.39567323943241567
+    }
+  },
+  "provenance": {
+    "novel_candidate_judgments": {
+      "batch_query_limit": 20,
+      "candidate_pair_coverage": 1.0,
+      "debug_batches": 48,
+      "positive_judgments": 486,
+      "source": "bounded Referee debug on assigned training split",
+      "token_scope": "esci_breed_training_only",
+      "unjudged_used_as_training_labels": false,
+      "zero_or_unjudged_ambiguous_ignored": 35174
+    },
+    "original_dense_lexical_ranks_scores_preserved": true,
+    "passage_bm25_formulation_commit": "cf42f0e",
+    "passage_csv_sha256": "211fc3280707e17b0c3d98616988f61a0039c97bc3113bf43cb29830f2176309",
+    "passage_queries_with_no_results": 4,
+    "passage_query_id_coverage": 1000,
+    "passage_ranks_scores_joined_by_exact_query_id": true,
+    "query_split": "seed 17, 750 fit / 250 validation; query-disjoint",
+    "query_text_locale_verified_against_referee_training_task": true,
+    "referee_calls_made_by_this_module": 0,
+    "training_query_count": 1000,
+    "turbopuffer_calls_made": 0
+  },
+  "score_source_consistency": {
+    "exact_score_matches_at_1e-5": 688,
+    "median_absolute_score_difference": 0.008282999999999596,
+    "median_per_query_kendall_tau": 0.9942272369456836,
+    "p95_absolute_score_difference": 0.05757099999999937,
+    "queries_with_rank_comparison": 747,
+    "shared_candidate_scores": 46066
+  }
+}

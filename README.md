@@ -197,3 +197,38 @@ The orchestrator evaluated the exact frozen commit `6508e87` against baseline
 retrieval calls. Aggregate NDCG@10 improved from `0.4159225643` to
 `0.4230479867` (`+0.0071254224`). The orchestrator accepted the change.
 No holdout queries or per-query metrics are recorded here.
+
+## Passage-only candidate expansion
+
+`rank-passage-candidate-expansion` joins the saved `cf42f0e` passage BM25
+results to the existing dense/lexical union by exact query ID. The original
+dense and lexical ranks/scores and candidate ordering are invariant. New
+passage-only products retain a separate rank/presence/score feature family.
+The expanded feature schema omits the existing computed `passage_bm25`
+feature, so the new arm does not count the same lexical signal twice.
+
+The runner is offline: it does not make Turbopuffer or Referee requests. Before
+ranking passage-only products, provide a checkpointed ID-filtered metadata file
+with exactly the title, brand, color, locale, and computed attributes for each
+novel ID. `passage_metadata_query` builds one locale- and ID-filtered read per
+eligible query (up to 100 IDs, no embeddings); it does not execute the query.
+Missing computed features remain missing, and a real computed zero remains
+available. The debug-label input contains positive judgments only; Referee's
+ambiguous grade-zero/unjudged results are excluded from training labels.
+
+```sh
+uv run rank-passage-candidate-expansion \
+  --candidates /path/to/esci_research_training_idfiltered_candidates.jsonl \
+  --grades /path/to/esci_research_training_idfiltered_grades.jsonl \
+  --targets /path/to/esci_research_training_idfiltered_targets.jsonl \
+  --passage-results /path/to/research_multi_query_extra_passage_lexical.csv \
+  --referee-task /path/to/training-task.json \
+  --novel-judgments /path/to/positive-novel-judgments.json \
+  --debug-manifest /path/to/debug-aggregate-manifest.json \
+  --output /path/to/passage-expansion-report.json
+```
+
+The training-only candidate and provenance diagnostics are in
+`docs/passage-expanded-training-results.json`. They show improved judged-target
+coverage and candidate-set ceiling, but the expanded ranker is explicitly not
+evaluated until the bounded metadata read is approved and completed.
