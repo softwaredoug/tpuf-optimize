@@ -1,4 +1,4 @@
-"""Training-only benchmark for Turbopuffer native rerank_by models.
+"""Private-split benchmark for Turbopuffer native rerank_by models.
 
 Task queries, rankings, credentials, and per-query metrics stay in a mode-0700
 directory outside the repository. This runner deliberately has no result or
@@ -112,7 +112,8 @@ def _triples(requests: Sequence[SearchRequest]) -> list[tuple[str, str, str]]:
 
 
 def _verify_same_training_queries(
-    reference: Sequence[SearchRequest], task_payload: Mapping[str, object]
+    reference: Sequence[SearchRequest], task_payload: Mapping[str, object],
+    split_label: str = "assigned",
 ) -> list[SearchRequest]:
     raw_queries = task_payload.get("queries")
     if not isinstance(raw_queries, list):
@@ -120,7 +121,7 @@ def _verify_same_training_queries(
     actual = [_request_from_query(query) for query in raw_queries]
     if _triples(actual) != _triples(reference):
         raise RefereeError(
-            "New Referee task did not match the assigned training query IDs, "
+            f"New Referee task did not match the {split_label} query IDs, "
             "texts, and locales exactly."
         )
     if len(actual) != 1000:
@@ -156,11 +157,12 @@ def _create_tasks(
     token: str,
     run_dir: Path,
     reference_requests: Sequence[SearchRequest],
+    split_label: str = "assigned",
 ) -> dict[str, dict[str, Any]]:
     tasks: dict[str, dict[str, Any]] = {}
     for name in ("baseline", *NATIVE_RERANK_MODELS):
         payload = _referee_request("POST", "/v1/tasks", token)
-        _verify_same_training_queries(reference_requests, payload)
+        _verify_same_training_queries(reference_requests, payload, split_label)
         task = payload.get("task")
         if not isinstance(task, dict) or not isinstance(task.get("id"), str):
             raise RefereeError("Referee returned an invalid task response.")
@@ -251,6 +253,7 @@ def _run_variant(
     reference_requests: Sequence[SearchRequest],
     candidate_counts: Mapping[str, int] | None = None,
     candidate_chars: Mapping[str, int] | None = None,
+    split_label: str = "training",
 ) -> tuple[dict[str, Any], dict[str, float]]:
     # Verify the actual saved task once more immediately before the work and
     # once more before submission, rather than assuming task creation was enough.
@@ -382,7 +385,7 @@ def _run_variant(
         # sentinel. This check catches accidental omission without fabricating.
         raise ValueError("Generated Referee rows omitted at least one query.")
     if _triples(_task_queries(task_payload)) != _triples(reference_requests):
-        raise RefereeError("Task no longer matches the assigned training split.")
+        raise RefereeError(f"Task no longer matches the assigned {split_label} split.")
     if {
         str(row["query_id"]) for row in task_rows
     } != {request.query_id for request in requests}:
@@ -528,6 +531,12 @@ def _parser() -> argparse.ArgumentParser:
         type=Path,
         help="Optional aggregate-only JSON report path, outside private task files.",
     )
+    parser.add_argument(
+        "--split-label",
+        choices=("training", "holdout"),
+        default="training",
+        help="Label the assigned split in the private aggregate report.",
+    )
     return parser
 
 
@@ -550,7 +559,7 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("The assigned training token file is empty.")
     reference_payload, requests = _read_reference(args.reference_task)
     del reference_payload
-    tasks = _create_tasks(token, run_dir, requests)
+    tasks = _create_tasks(token, run_dir, requests, args.split_label)
     candidate_counts: dict[str, int] = {}
     candidate_chars: dict[str, int] = {}
     variants: dict[str, dict[str, Any]] = {}
@@ -566,7 +575,7 @@ def main(argv: list[str] | None = None) -> int:
             namespace = client.namespace("esci-products")
             order = ("baseline", "cohere", "voyage")
             for name in order:
-                print(f"Running {name} variant on the assigned training split.")
+                print(f"Running {name} variant on the assigned {args.split_label} split.")
                 summary, per_query = _run_variant(
                     name,
                     tasks[name],
@@ -577,6 +586,7 @@ def main(argv: list[str] | None = None) -> int:
                     requests,
                     candidate_counts if name != "baseline" else candidate_counts,
                     candidate_chars if name != "baseline" else candidate_chars,
+                    split_label=args.split_label,
                 )
                 variants[name] = summary
                 if summary["submitted_query_count"] == summary["query_count"]:
@@ -606,7 +616,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
     report: dict[str, Any] = {
         "protocol": {
-            "split": "assigned 1,000-query ESCI NDCG training split only",
+            "split": f"assigned 1,000-query ESCI NDCG {args.split_label} split only",
             "tasks": (
                 "Separate Referee task per baseline and model; exact "
                 "ID/text/locale match verified."
@@ -639,19 +649,23 @@ def main(argv: list[str] | None = None) -> int:
                 "NDCG@10 differences."
             ),
             "execution_notes": (
-                "An initial setup attempt stopped at locale normalization before "
-                "any namespace query. A later baseline attempt was stopped by the "
-                "120-second shell limit during retrieval, and another completed "
-                "all 1,000 baseline queries but stopped before Referee submission "
-                "due to a local output-file bug. Their partial request/retry/"
-                "latency details were not retained and are excluded from the "
-                "reported complete run. The successful run submitted 1,000 queries "
-                "for each of its three tasks."
+                "The earlier timed-out training run was not submitted or reused."
+                if args.split_label == "holdout"
+                else (
+                    "An initial setup attempt stopped at locale normalization before "
+                    "any namespace query. A later baseline attempt was stopped by the "
+                    "120-second shell limit during retrieval, and another completed "
+                    "all 1,000 baseline queries but stopped before Referee submission "
+                    "due to a local output-file bug. Their partial request/retry/"
+                    "latency details were not retained and are excluded from the "
+                    "reported complete run. The successful run submitted 1,000 queries "
+                    "for each of its three tasks."
+                )
             ),
         },
         "variants": variants,
     }
-    _private_json(run_dir / "aggregate-training-report.json", report)
+    _private_json(run_dir / f"aggregate-{args.split_label}-report.json", report)
     if args.aggregate_output is not None:
         destination = args.aggregate_output.resolve()
         if destination == repo or repo not in destination.parents:
@@ -663,7 +677,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     if complete:
         print(
-            "Finished training-only evaluation. All three 1,000-query tasks "
+            f"Finished {args.split_label}-only evaluation. All three 1,000-query tasks "
             "were submitted; task contents, credentials, rankings, and "
             "per-query scores remain private."
         )
