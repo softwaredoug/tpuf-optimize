@@ -92,6 +92,15 @@ continues to omit those ambiguous candidates from pair construction.
 The optional model JSON contains only feature names and learned weights;
 `LinearRanker.from_json` loads that parameter-only artifact for inference.
 
+### Holdout acceptance record
+
+The frozen implementation and weights from commit `adf9768` were **ACCEPTED**
+by the orchestrator's private 1,000-query holdout evaluation. Aggregate
+NDCG@10 was `0.3892915845` for parent commit `cc5fc8a` and `0.4109423097`
+for candidate commit `adf9768`, a gain of `+0.0216507251`. This record contains
+aggregate metrics only; the evaluated implementation and model weights remain
+unchanged.
+
 ## Search architecture
 
 `TPufStrategy` owns the ESCI document mapping, namespace schema, and query
