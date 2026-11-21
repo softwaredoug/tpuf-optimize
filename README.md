@@ -112,9 +112,8 @@ extraction or ranking.
 The training-only 750/250 split (seed 17) evaluated all 250 validation queries
 on identical cached candidate lists. NDCG@10 was `0.422458` for both frozen
 `adf9768` and the same-fold base-feature refit, and `0.428803` for the
-computed-feature refit (2:1 RRF: `0.395673`). The computed-feature weights in
-`models/esci_pairwise_ranker_computed_features_training.json` are nominated
-for independent holdout evaluation only; this is not a holdout acceptance.
+computed-feature refit (2:1 RRF: `0.395673`). The frozen computed-feature
+weights are packaged with `tpuf_optimize` for the search agent below.
 
 To obtain labels only for the assigned training split, the debug collector
 submits candidate IDs to Referee's read-only `/debug` endpoint in serial
@@ -130,3 +129,25 @@ uv run rank-computed-features \
   --targets /path/to/esci_research_training_idfiltered_targets.jsonl \
   --output-dir /path/to/ablation
 ```
+
+## Product search agent experiment
+
+Install the branch's dependencies with `uv sync`, set `OPENAI_API_KEY` and
+`TURBOPUFFER_API_KEY`, and run:
+
+```sh
+uv run search-agent --locale us "Find blue running shoes for wide feet"
+```
+
+The OpenAI Agents SDK requires an initial `search_products` tool call. The
+agent can make up to three searches total, stays in the requested ESCI
+locale, and is instructed to cite only products returned by the tool.
+Use `--model` to override the default `gpt-5-mini`.
+
+The tool retrieves the top 100 Voyage-4 and top 100 BM25 candidates from
+`esci-products`, fetches computed features for their union, and returns the
+top 10 from the frozen computed-feature reranker (`e64100d`). On the paired
+1,000-query holdout that backend scored 0.41592 NDCG@10 versus 0.41094 for
+the previous reranker. This measures the backend, not the agent's reformulations.
+The catalog tool is read-only; the request and returned product summaries
+are sent to OpenAI, with SDK tracing disabled.

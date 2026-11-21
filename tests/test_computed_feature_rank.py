@@ -134,7 +134,8 @@ class ComputedFeatureRankTests(unittest.TestCase):
     def test_training_nominee_artifact_contains_weights_only(self) -> None:
         path = (
             Path(__file__).resolve().parents[1]
-            / "models"
+            / "src"
+            / "tpuf_optimize"
             / "esci_pairwise_ranker_computed_features_training.json"
         )
         payload = json.loads(path.read_text(encoding="utf-8"))
