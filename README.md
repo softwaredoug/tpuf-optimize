@@ -204,3 +204,70 @@ top 10 from the frozen computed-feature reranker (`e64100d`). On the paired
 the previous reranker. This measures the backend, not the agent's reformulations.
 The catalog tool is read-only; the request and returned product summaries
 are sent to OpenAI, with SDK tracing disabled.
+
+## Typed/computed feature experiment
+
+`rank-typed-computed-experiment` adds a compact typed evidence family to the
+existing computed-feature pairwise ranker. It uses only fields already present
+in the candidate cache: title, explicit brand, and explicit color. It does not
+infer or request additional product fields. As in the typed-evidence prototype
+at `6f5b6ac`, product identifier, number, and unit evidence is read from title,
+and a missing slot is unknown rather than contradictory. The features are
+product-identifier match plus support, contradiction, and unknown fractions
+over query-requested typed slots.
+
+The experiment compares the frozen `e64100d` weights, same-fold
+computed-feature-only refit, typed-only diagnostic, and typed+computed
+refits. The outer split is the fixed shuffled seed-17 750/250 query split.
+Typed-model L2 is selected only on an inner query-disjoint split of the 750
+outer-fit queries; the locked 250 are used for final paired NDCG and bootstrap
+reporting only. Unknown-state ablation compares a separately fit model without
+that feature and a fixed-weight inference ablation. Candidate IDs and source
+ranks/scores are retained; query/document IDs never become model features.
+
+Run against the approved cached training artifacts (outputs should also stay
+outside the repository):
+
+```sh
+uv run rank-typed-computed-experiment \
+  --candidates /path/to/esci_research_training_idfiltered_candidates.jsonl \
+  --grades /path/to/esci_research_training_idfiltered_grades.jsonl \
+  --targets /path/to/esci_research_training_idfiltered_targets.jsonl \
+  --output-dir /path/to/typed-computed-experiment
+```
+
+Reported latency is local per-query feature extraction plus ranking over the
+same cached candidate groups; it excludes retrieval/network and is not
+end-to-end latency.
+
+### Seed-17 training validation
+
+On the identical 250-query locked validation fold, frozen `e64100d` and the
+same-fold computed-only refit both scored `0.428802` NDCG@10. The
+fit-tuned typed+computed model with product-match, support, and contradiction
+features (omitting the unknown feature) scored `0.431501`, a paired mean delta
+of `+0.002699` with 95% query-bootstrap interval `[-0.004980, +0.010471]`.
+The interval includes zero, so this is a tentative training-validation
+improvement on training validation. The single no-unknown weights artifact is
+the nominated model.
+The full typed model with unknown scored `0.430692`; typed-only scored
+`0.419884`. Suppressing the unknown contribution at inference increased the
+full model by `0.000824` (paired interval `[-0.001972, +0.000018]`), suggesting
+that missing evidence should remain neutral rather than receive its own
+learned weight.
+
+Fit-only tuning selected L2 `0.3` (learning rate `0.1`, 500 epochs) on an inner
+600/150 split of the outer 750-query fit set. Local feature-extraction plus
+ranking latency over cached candidates was `0.932 ms` p50 / `1.173 ms` p95 for
+the frozen model and `4.160 ms` p50 / `5.586 ms` p95 for the nominee. This is
+not end-to-end latency. Aggregate-only metrics are in
+`docs/typed-computed-training-results.json`; no query-level rows or labels are
+included.
+
+### Private holdout evaluation
+
+The orchestrator evaluated the exact frozen commit `6508e87` against baseline
+`e64100d` on the same 1,000-query private holdout candidate cache, with no
+retrieval calls. Aggregate NDCG@10 improved from `0.4159225643` to
+`0.4230479867` (`+0.0071254224`). The orchestrator accepted the change.
+No holdout queries or per-query metrics are recorded here.

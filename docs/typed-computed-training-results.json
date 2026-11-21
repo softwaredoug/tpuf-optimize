@@ -1,0 +1,142 @@
+{
+  "feature_isolation": {
+    "typed_family_only": {
+      "evaluated_queries": 250,
+      "pairwise_linear_ndcg": 0.4198837989139599,
+      "queries": 250,
+      "rrf_2_1_ndcg": 0.39567323943241567
+    },
+    "typed_missing_unknown_contribution_removed": {
+      "evaluated_queries": 250,
+      "pairwise_linear_ndcg": 0.4315154273854057,
+      "queries": 250,
+      "rrf_2_1_ndcg": 0.39567323943241567
+    }
+  },
+  "fold": {
+    "all_expected_validation_queries": true,
+    "identical_validation_candidate_groups": true,
+    "query_disjoint": true,
+    "seed": 17,
+    "training_queries": 750,
+    "validation_queries": 250
+  },
+  "local_latency": {
+    "frozen_e64100d": {
+      "measurement": "local feature extraction + ranking; cached candidates; not end-to-end",
+      "median_ms_per_query": 0.9327084999999999,
+      "p50_ms_per_query": 0.931542,
+      "p95_ms_per_query": 1.172958,
+      "queries": 250,
+      "repetitions_per_query": 3
+    },
+    "typed_computed_with_unknown": {
+      "measurement": "local feature extraction + ranking; cached candidates; not end-to-end",
+      "median_ms_per_query": 4.2010005,
+      "p50_ms_per_query": 4.196167,
+      "p95_ms_per_query": 5.583792,
+      "queries": 250,
+      "repetitions_per_query": 3
+    },
+    "typed_computed_without_unknown": {
+      "measurement": "local feature extraction + ranking; cached candidates; not end-to-end",
+      "median_ms_per_query": 4.1630415,
+      "p50_ms_per_query": 4.160458,
+      "p95_ms_per_query": 5.586292,
+      "queries": 250,
+      "repetitions_per_query": 3
+    }
+  },
+  "paired_query_bootstrap_95_percent": {
+    "typed_computed_no_unknown_vs_computed_refit": {
+      "ci95_high": 0.010470696196377199,
+      "ci95_low": -0.004979651878329797,
+      "mean_delta": 0.0026986397461593063,
+      "paired_queries": 250
+    },
+    "typed_computed_no_unknown_vs_frozen": {
+      "ci95_high": 0.010470696196377199,
+      "ci95_low": -0.004979651878329797,
+      "mean_delta": 0.0026986397461593063,
+      "paired_queries": 250
+    },
+    "typed_computed_vs_computed_refit": {
+      "ci95_high": 0.00975532434769316,
+      "ci95_low": -0.0058507549767003895,
+      "mean_delta": 0.0018893835884413958,
+      "paired_queries": 250
+    },
+    "typed_computed_vs_frozen": {
+      "ci95_high": 0.00975532434769316,
+      "ci95_low": -0.0058507549767003895,
+      "mean_delta": 0.0018893835884413958,
+      "paired_queries": 250
+    },
+    "typed_computed_vs_without_unknown_contribution": {
+      "ci95_high": 1.8246511716390135e-05,
+      "ci95_low": -0.0019719724065783836,
+      "mean_delta": -0.0008235275584401403,
+      "paired_queries": 250
+    }
+  },
+  "typed_model_tuning": {
+    "with_unknown_state": {
+      "epochs": 500,
+      "fit_only_tuning": true,
+      "inner_training_queries": 600,
+      "inner_validation_queries": 150,
+      "selected_l2": 0.3,
+      "selected_learning_rate": 0.1,
+      "selection_metric": "inner fit-fold NDCG@10",
+      "unknown_feature_included": true
+    },
+    "without_unknown_state": {
+      "epochs": 500,
+      "fit_only_tuning": true,
+      "inner_training_queries": 600,
+      "inner_validation_queries": 150,
+      "selected_l2": 0.3,
+      "selected_learning_rate": 0.1,
+      "selection_metric": "inner fit-fold NDCG@10",
+      "unknown_feature_included": false
+    }
+  },
+  "validation_ndcg_at_10": {
+    "frozen_e64100d": {
+      "evaluated_queries": 250,
+      "pairwise_linear_ndcg": 0.42880251623852417,
+      "queries": 250,
+      "rrf_2_1_ndcg": 0.39567323943241567
+    },
+    "same_fold_computed_refit": {
+      "evaluated_queries": 250,
+      "pairwise_linear_ndcg": 0.42880251623852417,
+      "queries": 250,
+      "rrf_2_1_ndcg": 0.39567323943241567
+    },
+    "same_fold_typed_computed_no_unknown_refit": {
+      "evaluated_queries": 250,
+      "pairwise_linear_ndcg": 0.43150115598468347,
+      "queries": 250,
+      "rrf_2_1_ndcg": 0.39567323943241567
+    },
+    "same_fold_typed_computed_refit": {
+      "evaluated_queries": 250,
+      "pairwise_linear_ndcg": 0.4306918998269656,
+      "queries": 250,
+      "rrf_2_1_ndcg": 0.39567323943241567
+    },
+    "same_fold_typed_only_refit": {
+      "evaluated_queries": 250,
+      "pairwise_linear_ndcg": 0.4198837989139599,
+      "queries": 250,
+      "rrf_2_1_ndcg": 0.39567323943241567
+    },
+    "typed_computed_without_unknown_contribution": {
+      "evaluated_queries": 250,
+      "pairwise_linear_ndcg": 0.4315154273854057,
+      "queries": 250,
+      "rrf_2_1_ndcg": 0.39567323943241567
+    }
+  }
+}
