@@ -54,6 +54,34 @@ Turbopuffer's multi-query API. Queries combine BM25 title and description scores
 with title weighted twice as heavily. Queries with no hits are emitted with the
 `-1,-1,-1` sentinel row.
 
+## Offline learned-rank experiment
+
+`learned-rank` trains and evaluates an offline, query-grouped pairwise linear
+reranker from cached retrieval candidates. It makes no Turbopuffer or Referee
+calls. Candidate JSONL rows contain `query_id`, `query_text`, `locale`, and
+rank-ordered `dense` and `lexical` arrays of documents with `doc_id`, `score`,
+and `title`. Grade JSONL rows contain `query_id` and `grades`, either a
+document-ID-to-grade object or a list of `{ "doc_id": ..., "grade": ... }`
+objects. Example:
+
+```sh
+uv run learned-rank \
+  --candidates esci_research_training_candidates.jsonl \
+  --grades training_grades.jsonl \
+  --output validation_results.csv \
+  --model-output learned_rank_model.json
+```
+
+The default seeded split assigns whole query groups to training or validation.
+Features use retrieval ranks/scores and query/title token coverage only; query
+and document IDs are join/tie-break keys, not model features. Pairwise fitting
+uses unequal positive-grade pairs, so grade zero is never treated as a negative.
+The command compares validation NDCG for its reranker and the deterministic
+dense:lexical 2:1 reciprocal-rank-fusion baseline on identical candidate sets.
+It also reports a candidate-set oracle on training queries only as a diagnostic;
+the oracle is not used to produce rankings. Unjudged/zero-grade documents do
+not contribute gain in the NDCG calculation.
+
 ## Search architecture
 
 `TPufStrategy` owns the ESCI document mapping, namespace schema, and query

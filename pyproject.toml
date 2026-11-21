@@ -15,6 +15,7 @@ dependencies = [
 [project.scripts]
 index-esci = "tpuf_optimize.index_esci:main"
 query = "tpuf_optimize.query_batch:main"
+learned-rank = "tpuf_optimize.learned_rank:main"
 
 [dependency-groups]
 dev = [
