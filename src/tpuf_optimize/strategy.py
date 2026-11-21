@@ -288,7 +288,7 @@ class TPufStrategy:
             emitted += 1
 
     def rank_by(self, query_text: str, locale: str) -> RankBy:
-        """Build the locale-appropriate weighted title/description BM25 query."""
+        """Use the strongest weighted title or description BM25 match."""
         locale_analyzer = self.LOCALE_ANALYZERS.get(locale)
         suffix = (
             locale_analyzer[0]
@@ -296,7 +296,7 @@ class TPufStrategy:
             else self.DEFAULT_ANALYZER
         )
         return (
-            "Sum",
+            "Max",
             (
                 (
                     "Product",

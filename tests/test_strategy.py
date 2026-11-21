@@ -119,6 +119,7 @@ class TPufStrategyTests(unittest.TestCase):
         es_query = self.strategy.query("zapato azul", "es", top_k=10)
         jp_query = self.strategy.query("青い靴", "jp", top_k=10)
 
+        self.assertEqual(us_query["rank_by"][0], "Max")
         self.assertIn("title__word_v4__en__stem_stop", str(us_query["rank_by"]))
         self.assertIn("title__word_v4__es__stem_stop_fold", str(es_query["rank_by"]))
         self.assertIn("title__kuromoji__ja", str(jp_query["rank_by"]))
