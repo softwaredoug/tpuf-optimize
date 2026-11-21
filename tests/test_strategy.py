@@ -120,8 +120,14 @@ class TPufStrategyTests(unittest.TestCase):
         jp_query = self.strategy.query("青い靴", "jp", top_k=10)
 
         self.assertIn("title__word_v4__en__stem_stop", str(us_query["rank_by"]))
+        self.assertIn("passage__word_v4__en__stem_stop", str(us_query["rank_by"]))
+        self.assertNotIn("description__word_v4__en__stem_stop", str(us_query["rank_by"]))
         self.assertIn("title__word_v4__es__stem_stop_fold", str(es_query["rank_by"]))
+        self.assertIn("passage__word_v4__es__stem_stop_fold", str(es_query["rank_by"]))
         self.assertIn("title__kuromoji__ja", str(jp_query["rank_by"]))
+        self.assertIn("passage__kuromoji__ja", str(jp_query["rank_by"]))
+        self.assertEqual(self.strategy.TITLE_WEIGHT, 1.0)
+        self.assertEqual(self.strategy.PASSAGE_WEIGHT, 0.5)
 
     def test_pretokenizer_handles_latin_and_japanese(self) -> None:
         self.assertEqual(

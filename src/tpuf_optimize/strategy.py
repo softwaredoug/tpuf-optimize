@@ -15,8 +15,8 @@ from turbopuffer.types.namespace_multi_query_params import Query
 class TPufStrategy:
     """Own the fields, analyzers, embeddings, and queries under experimentation."""
 
-    TITLE_WEIGHT = 2.0
-    DESCRIPTION_WEIGHT = 1.0
+    TITLE_WEIGHT = 1.0
+    PASSAGE_WEIGHT = 0.5
 
     EMBEDDING_MODEL = "voyage/voyage-4"
     EMBEDDING_DIMS = 1024
@@ -288,7 +288,7 @@ class TPufStrategy:
             emitted += 1
 
     def rank_by(self, query_text: str, locale: str) -> RankBy:
-        """Build the locale-appropriate weighted title/description BM25 query."""
+        """Rank title strongly, with a smaller combined title/description signal."""
         locale_analyzer = self.LOCALE_ANALYZERS.get(locale)
         suffix = (
             locale_analyzer[0]
@@ -305,8 +305,8 @@ class TPufStrategy:
                 ),
                 (
                     "Product",
-                    self.DESCRIPTION_WEIGHT,
-                    (f"description__{suffix}", "BM25", query_text),
+                    self.PASSAGE_WEIGHT,
+                    (f"passage__{suffix}", "BM25", query_text),
                 ),
             ),
         )
