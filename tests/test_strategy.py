@@ -170,7 +170,7 @@ class TPufStrategyTests(unittest.TestCase):
 
     def test_hybrid_is_the_default_query_strategy(self) -> None:
         self.assertEqual(TPufStrategy().hybrid_weights, (2.0, 1.0))
-        self.assertEqual(TPufStrategy().attribute_weight, 0.25)
+        self.assertEqual(TPufStrategy().attribute_weight, 0.5)
         self.assertIsNone(TPufStrategy(hybrid_weights=None).hybrid_weights)
 
     def test_reciprocal_rank_fusion_combines_rankings(self) -> None:

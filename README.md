@@ -59,7 +59,7 @@ Hybrid search retrieves up to 100 candidates from each retriever.
 The default fusion weights are 2:1 (dense:lexical) with an RRF constant of 10;
 `--dense-weight`, `--lexical-weight`, and `--rrf-constant` can override them.
 Use `--attribute-weight` to add a third locale-aware BM25 candidate over
-brand, bullet point, color, and category fields; its default weight is 0.25.
+brand, bullet point, color, and category fields; its default weight is 0.5.
 Use `--lexical-only` to disable hybrid search.
 
 ```sh

@@ -29,7 +29,7 @@ class TPufStrategy:
         self,
         hybrid_weights: tuple[float, float] | None = (2.0, 1.0),
         rank_constant: int = 10,
-        attribute_weight: float = 0.25,
+        attribute_weight: float = 0.5,
     ) -> None:
         if hybrid_weights is not None and (
             len(hybrid_weights) != 2

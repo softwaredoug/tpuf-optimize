@@ -90,7 +90,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--attribute-weight",
         type=float,
-        default=0.25,
+        default=0.5,
         help="Add a locale-aware product-field BM25 candidate to hybrid RRF.",
     )
     parser.add_argument("--rrf-constant", type=int, default=10)
