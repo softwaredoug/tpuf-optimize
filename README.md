@@ -62,12 +62,28 @@ so relevance experiments can focus on the strategy without changing the runners.
 
 ## ESCI 5,000-query leaderboard
 
-The ten variants below are being evaluated on the same 5,000-query Referee
-split (`esci-products`, seed `20261122`). The branch links point to the
-experiment histories; commit hashes identify the exact versions under test.
-Rows are not ranked until the new NDCG@10 results are available. Latency will
-report end-to-end p50 / p95 in milliseconds on the same fixed 100-query sample
-for each variant, measured independently of the shared retrieval pass.
+To measure a single checkout without a client-side result or feature cache,
+use an explicit `query_id,query,locale` CSV and keep the inputs and outputs
+outside the repository in a private directory:
+
+```sh
+uv run query --queries "$RUN/queries.csv" --output "$RUN/rankings.csv" \
+  --benchmark-db "$RUN/timings.sqlite"
+```
+
+Benchmark mode defaults to one query per batch. It records rankings and
+latency together, counting only the successful attempt after any HTTP 429s.
+For larger `--batch-size` values, `latency_ms` in the checkpoint's `queries`
+table is successful batch time divided by the number of user queries. This
+is amortized time, not individual response latency. `--resume` continues
+the same run after interruption; use a fresh database for every new run or
+variant. Turbopuffer's internal caching is outside this tool's control.
+
+The table below is an unmeasured lineup from the earlier benchmark design.
+
+The branch links point to the experiment histories; commit hashes identify
+the planned versions. No results from the earlier shared-retrieval run are
+included.
 
 | Variant | Latency p50 / p95 (ms) | Experiment branch | Evaluated commit | NDCG@10 |
 |---|---:|---|---|---:|

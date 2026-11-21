@@ -168,3 +168,30 @@ class Searcher:
             rows_by_query = self._query_batch(queries)
             for request, rows in zip(request_batch, rows_by_query):
                 yield request, rows
+
+    def measure_batch(
+        self, requests: list[SearchRequest], top_k: int
+    ) -> tuple[list[list[Row]], float, int]:
+        """Return rankings, successful-attempt ms per query, and 429 retries."""
+        if not 1 <= len(requests) <= self.batch_size:
+            raise ValueError("Measured batch must fit the configured batch size")
+        attempts = 0
+
+        def run() -> tuple[list[list[Row]], float]:
+            nonlocal attempts
+            attempts += 1
+            start = time.perf_counter()
+            queries = [
+                self.strategy.query(request.text, request.locale, top_k)
+                for request in requests
+            ]
+            response = self.namespace.multi_query(queries=queries)
+            if len(response.results) != len(requests):
+                raise ValueError("Incomplete response for measured query batch")
+            rows = [(result.rows or [])[:top_k] for result in response.results]
+            return rows, (time.perf_counter() - start) * 1000 / len(requests)
+
+        # No serial fallback: it would silently change the measured workload.
+        # The caller must disable SDK retries so every 429 is visible here.
+        rows, elapsed = self._with_rate_limit_backoff(run)
+        return rows, elapsed, attempts - 1
