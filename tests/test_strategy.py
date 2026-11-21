@@ -140,6 +140,28 @@ class TPufStrategyTests(unittest.TestCase):
         self.assertIn("title__word_v4__en__stem_stop", str(lexical_query["rank_by"]))
         self.assertEqual(strategy.hybrid_weights, (1.0, 2.0))
 
+    def test_hybrid_exact_knn_uses_filtered_passage_embedding(self) -> None:
+        strategy = TPufStrategy(exact_knn=True)
+        vector_query, lexical_query = strategy.hybrid_queries(
+            "blue shoe", "en-US", top_k=10
+        )
+
+        self.assertEqual(
+            vector_query["rank_by"],
+            (
+                "embedding__voyage_4__passage",
+                "kNN",
+                (
+                    "Embed",
+                    "blue shoe",
+                    {"model": "voyage/voyage-4"},
+                ),
+            ),
+        )
+        self.assertEqual(vector_query["filters"], ("locale", "Eq", "us"))
+        self.assertEqual(vector_query["top_k"], 100)
+        self.assertEqual(lexical_query["top_k"], 100)
+
     def test_hybrid_is_the_default_query_strategy(self) -> None:
         self.assertEqual(TPufStrategy().hybrid_weights, (2.0, 1.0))
         self.assertIsNone(TPufStrategy(hybrid_weights=None).hybrid_weights)

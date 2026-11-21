@@ -32,7 +32,8 @@ def _read_queries(path: Path) -> list[SearchRequest]:
                 raise ValueError(
                     f"{path}, row {query_number + 1}: query and locale must not be empty"
                 )
-            requests.append(SearchRequest(f"q{query_number}", text, locale))
+            query_id = (row.get("query_id") or "").strip() or f"q{query_number}"
+            requests.append(SearchRequest(query_id, text, locale))
 
     return requests
 
@@ -88,6 +89,12 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--dense-weight", type=float, default=2.0)
     parser.add_argument("--lexical-weight", type=float, default=1.0)
     parser.add_argument("--rrf-constant", type=int, default=10)
+    parser.add_argument(
+        "--dense-search",
+        choices=("ann", "exact-knn"),
+        default="ann",
+        help="Use approximate or exact nearest neighbors for the hybrid dense leg.",
+    )
     return parser
 
 
@@ -119,6 +126,7 @@ def main(argv: list[str] | None = None) -> int:
             strategy = TPufStrategy(
                 hybrid_weights=hybrid_weights,
                 rank_constant=args.rrf_constant,
+                exact_knn=args.dense_search == "exact-knn",
             )
             searcher = Searcher(namespace, strategy, args.batch_size)
             _write_results(args.output, requests, searcher, args.top_k)

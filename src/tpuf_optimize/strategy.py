@@ -29,6 +29,7 @@ class TPufStrategy:
         self,
         hybrid_weights: tuple[float, float] | None = (2.0, 1.0),
         rank_constant: int = 10,
+        exact_knn: bool = False,
     ) -> None:
         if hybrid_weights is not None and (
             len(hybrid_weights) != 2
@@ -46,6 +47,7 @@ class TPufStrategy:
             raise ValueError("rank_constant must not be negative")
         self.hybrid_weights = hybrid_weights
         self.rank_constant = rank_constant
+        self.exact_knn = exact_knn
 
     EMBEDDING_MODEL = "voyage/voyage-4"
     EMBEDDING_DIMS = 1024
@@ -353,16 +355,25 @@ class TPufStrategy:
     def hybrid_queries(
         self, query_text: str, locale: str, top_k: int
     ) -> tuple[Query, Query]:
-        """Return Voyage passage ANN and locale-specific lexical candidates."""
+        """Return Voyage dense and locale-specific lexical candidates."""
         locale = self.normalize_locale(locale)
         candidate_k = max(top_k, self.HYBRID_CANDIDATE_DEPTH)
         lexical_query = self.query(query_text, locale, candidate_k)
-        vector_query: Query = {
-            "rank_by": (
+        rank_by = (
+            (
+                "embedding__voyage_4__passage",
+                "kNN",
+                ("Embed", query_text, {"model": self.EMBEDDING_MODEL}),
+            )
+            if self.exact_knn
+            else (
                 "passage__embed__voyage_4",
                 "ANN",
                 ("Embed", query_text),
-            ),
+            )
+        )
+        vector_query: Query = {
+            "rank_by": rank_by,
             "filters": ("locale", "Eq", locale),
             "top_k": candidate_k,
             "include_attributes": ["title", "description", "locale"],

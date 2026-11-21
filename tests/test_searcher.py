@@ -61,6 +61,29 @@ class SearcherTests(unittest.TestCase):
         self.assertEqual(len(results), 9)
         self.assertEqual(namespace.call_sizes, [16, 2])
 
+    def test_searcher_exact_knn_uses_the_dense_hybrid_leg(self) -> None:
+        namespace = MemoryNamespace()
+        strategy = TPufStrategy(exact_knn=True)
+
+        list(
+            Searcher(namespace, strategy).search(
+                [SearchRequest("q1", "blue shoe", "en-US")], top_k=5
+            )
+        )
+
+        self.assertEqual(
+            namespace.queries[0]["rank_by"],
+            (
+                "embedding__voyage_4__passage",
+                "kNN",
+                (
+                    "Embed",
+                    "blue shoe",
+                    {"model": "voyage/voyage-4"},
+                ),
+            ),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
