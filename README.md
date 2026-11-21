@@ -219,8 +219,10 @@ uv run search-agent-variants compare
 Add `--concurrency N` to each `run` to change the number of independent agent
 queries in flight. Tasks and checkpoints use only the assigned training token
 and remain in the private temporary directory. The separate 1,000-query
-holdout is never opened by these commands. No agent-variant metrics have been
-submitted or recorded yet.
+holdout is never opened by these commands. The initial free-text parsing
+attempt produced invalid near-empty rankings and is excluded. A structured
+ranked-results rerun (each item carries `doc_id`) is pending on fresh tasks from
+the same training split.
 
 ## Typed/computed feature experiment
 

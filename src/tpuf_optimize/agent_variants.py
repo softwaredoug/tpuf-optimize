@@ -24,7 +24,6 @@ from tpuf_optimize.agent_eval import (
     REFEREE_URL,
     _atomic_json,
     _task_completion,
-    extract_recommendation_ids,
     result_rows,
 )
 from tpuf_optimize.search_agent import (
@@ -32,6 +31,7 @@ from tpuf_optimize.search_agent import (
     MAX_SEARCHES,
     ProductSearch,
     build_agent,
+    extract_ranked_product_ids,
 )
 from tpuf_optimize.searcher import SearchRequest
 
@@ -46,6 +46,7 @@ TASK_QUERY_COUNT = 1000
 DEFAULT_CONCURRENCY = 8
 MAX_CONCURRENCY = 32
 STATE_VERSION = 1
+OUTPUT_SCHEMA = "ranked-search-results-v3"
 
 
 def _task_signature(task: object) -> list[tuple[str, str, str]]:
@@ -99,7 +100,7 @@ def prepare_tasks() -> dict[str, int]:
         raise ValueError("The assigned training token is empty.")
     expected = _task_signature(json.loads(REFERENCE_TASK.read_text(encoding="utf-8")))
     for variant in VARIANTS:
-        path = PRIVATE_DIR / f"{variant}.task.json"
+        path = PRIVATE_DIR / f"{OUTPUT_SCHEMA}-{variant}.task.json"
         task = json.loads(path.read_text(encoding="utf-8")) if path.exists() else _post_task(token)
         if _task_signature(task) != expected:
             raise ValueError(f"{variant} task does not exactly match the assigned training task.")
@@ -153,7 +154,7 @@ async def _query_agent(
         raise RuntimeError("A backend search failed inside the agent tool.")
     if not 1 <= observed.tool_calls <= MAX_SEARCHES:
         raise RuntimeError("Agent violated the tool-call budget.")
-    ids, invalid, missing, malformed = extract_recommendation_ids(
+    ids, invalid, missing, malformed = extract_ranked_product_ids(
         result.final_output, observed.returned_ids
     )
     return {
@@ -203,6 +204,7 @@ def _read_or_initialize_state(
     if not path.exists():
         state: dict[str, Any] = {
             "version": STATE_VERSION,
+            "output_schema": OUTPUT_SCHEMA,
             "variant": variant,
             "task_id": task_id,
             "model": DEFAULT_MODEL,
@@ -216,6 +218,7 @@ def _read_or_initialize_state(
     state = json.loads(path.read_text(encoding="utf-8"))
     if (
         state.get("version") != STATE_VERSION
+        or state.get("output_schema") != OUTPUT_SCHEMA
         or state.get("variant") != variant
         or state.get("task_id") != task_id
         or state.get("model") != DEFAULT_MODEL
@@ -246,7 +249,7 @@ def run_variant(variant: str, concurrency: int, *, allow_live: bool) -> dict[str
 
 
 def _run_variant_locked(variant: str, concurrency: int) -> dict[str, Any]:
-    task_path = PRIVATE_DIR / f"{variant}.task.json"
+    task_path = PRIVATE_DIR / f"{OUTPUT_SCHEMA}-{variant}.task.json"
     reference = json.loads(REFERENCE_TASK.read_text(encoding="utf-8"))
     task = json.loads(task_path.read_text(encoding="utf-8"))
     if _task_signature(task) != _task_signature(reference):
@@ -254,8 +257,12 @@ def _run_variant_locked(variant: str, concurrency: int) -> dict[str, Any]:
     requests = _requests(task)
     task_id = task["task"]["id"]
     token = TOKEN_FILE.read_text(encoding="utf-8").strip()
-    checkpoint = PRIVATE_DIR / f"gpt-6-luna-{variant}-c{concurrency}.checkpoint.json"
-    result_path = PRIVATE_DIR / f"gpt-6-luna-{variant}-c{concurrency}.result.json"
+    checkpoint = PRIVATE_DIR / (
+        f"{OUTPUT_SCHEMA}-gpt-6-luna-{variant}-c{concurrency}.checkpoint.json"
+    )
+    result_path = PRIVATE_DIR / (
+        f"{OUTPUT_SCHEMA}-gpt-6-luna-{variant}-c{concurrency}.result.json"
+    )
     pending = result_path.with_suffix(".completion-pending")
     if result_path.exists():
         return json.loads(result_path.read_text(encoding="utf-8"))
@@ -354,10 +361,10 @@ def summarize(concurrency: int) -> dict[str, Any]:
     score_maps = {}
     for variant in VARIANTS:
         result_path = PRIVATE_DIR / (
-            f"gpt-6-luna-{variant}-c{concurrency}.result.json"
+            f"{OUTPUT_SCHEMA}-gpt-6-luna-{variant}-c{concurrency}.result.json"
         )
         checkpoint_path = PRIVATE_DIR / (
-            f"gpt-6-luna-{variant}-c{concurrency}.checkpoint.json"
+            f"{OUTPUT_SCHEMA}-gpt-6-luna-{variant}-c{concurrency}.checkpoint.json"
         )
         result = json.loads(result_path.read_text(encoding="utf-8"))
         state = json.loads(checkpoint_path.read_text(encoding="utf-8"))
@@ -433,7 +440,9 @@ def main(argv: list[str] | None = None) -> int:
             }, sort_keys=True))
         else:
             summary = summarize(args.concurrency)
-            output = PRIVATE_DIR / "gpt-6-luna-agent-variant-summary.json"
+            output = PRIVATE_DIR / (
+                "gpt-6-luna-ranked-search-results-v3-agent-variant-summary.json"
+            )
             _atomic_json(output, summary)
             print(json.dumps(summary, sort_keys=True))
         return 0

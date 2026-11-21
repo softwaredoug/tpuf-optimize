@@ -10,11 +10,18 @@
 
 The agent uses `gpt-6-luna`, the same prompt, locale restriction, three-tool-call
 budget, and `search_products` interface for all variants. Each tool response
-contains document ID, title, description (up to 1,200 characters), and available
-brand/color/category values. A single agent makes tool calls serially, but the
-runner allows up to eight independent query agents in flight (`--concurrency`
-can be set from 1 to 32). The concurrency value is fixed in each checkpoint so
-resumed latency samples are not silently mixed across loads.
+contains up to 20 products with document ID, title, description (up to 1,200
+characters), and available brand/color/category values. The agent is asked to
+rank the results and can use descriptions to decide whether to reformulate. Its
+final answer is constrained to a structured ordered list of up to ten result
+objects, each with a `doc_id`. Array order determines rank. The evaluator
+accepts only IDs actually returned by a tool call for that query, avoiding
+free-text ID-label parsing.
+
+A single agent makes tool calls serially, but the runner allows up to eight
+independent query agents in flight (`--concurrency` can be set from 1 to 32).
+The concurrency value is fixed in each checkpoint so resumed latency samples
+are not silently mixed across loads.
 
 ## Split and execution
 
@@ -48,3 +55,7 @@ not a holdout result.
 `OPENAI_API_KEY` is used by the Agents SDK and `TURBOPUFFER_API_KEY` by the
 retrieval tool. Neither key is accepted as an argument or written to outputs.
 The query and retrieved product data are sent to OpenAI; traces are disabled.
+
+Previous free-text parser results are not included in this protocol. Structured
+`doc_id` result runs use fresh Referee tasks on the same training split; tasks
+completed under the prior output format are not reused.

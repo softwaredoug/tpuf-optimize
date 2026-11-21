@@ -8,7 +8,13 @@ from unittest.mock import Mock, patch
 from agents.tool_context import ToolContext
 from turbopuffer.types import Row
 
-from tpuf_optimize.search_agent import ProductSearch, build_agent, load_ranker
+from tpuf_optimize.search_agent import (
+    ProductRecommendations,
+    ProductSearch,
+    build_agent,
+    extract_ranked_product_ids,
+    load_ranker,
+)
 
 
 class ProductSearchTests(unittest.TestCase):
@@ -94,6 +100,7 @@ class AgentToolTests(unittest.IsolatedAsyncioTestCase):
         agent = build_agent(search, "en-US", "gpt-6-luna")
         self.assertEqual(agent.model_settings.tool_choice, "required")
         self.assertFalse(agent.model_settings.parallel_tool_calls)
+        self.assertIs(agent.output_type, ProductRecommendations)
         tool = agent.tools[0]
         self.assertEqual(tool.name, "search_products")
         self.assertIn("descriptions", tool.description.lower())
@@ -114,3 +121,27 @@ class AgentToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("error", await invoke("us"))
         self.assertEqual(search.search.call_count, 3)
         search.search.assert_called_with("blue shoe", "us")
+
+    def test_structured_output_keeps_only_unique_ids_seen_in_tool_results(self):
+        output = ProductRecommendations(
+            ranked_results=[
+                {"doc_id": "p2"},
+                {"doc_id": "invented"},
+                {"doc_id": "p1"},
+                {"doc_id": "p2"},
+            ]
+        )
+        self.assertEqual(
+            extract_ranked_product_ids(output, {"p1", "p2"}),
+            (["p2", "p1"], 2, False, 0),
+        )
+        self.assertEqual(
+            extract_ranked_product_ids(
+                ProductRecommendations(ranked_results=[]), {"p1"}
+            ),
+            ([], 0, True, 0),
+        )
+        self.assertEqual(
+            extract_ranked_product_ids("free text", {"p1"}),
+            ([], 0, True, 1),
+        )

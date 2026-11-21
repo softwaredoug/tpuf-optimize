@@ -32,6 +32,7 @@ from tpuf_optimize.search_agent import (
     TOP_K,
     ProductSearch,
     build_agent,
+    extract_ranked_product_ids,
     load_ranker,
 )
 from tpuf_optimize.searcher import SearchRequest
@@ -48,7 +49,7 @@ ARM_TASK_FILES = {
 }
 TASK_QUERY_COUNT = 1000
 MODEL = DEFAULT_MODEL
-CHECKPOINT_VERSION = 1
+CHECKPOINT_VERSION = 2
 BOOTSTRAP_SAMPLES = 10_000
 ID_LABEL_RE = re.compile(
     r"\b(?:document\s+id|doc(?:ument)?_id|product\s+id)"
@@ -249,7 +250,7 @@ def _query_agent(
         raise RuntimeError("A backend search call failed inside the agent tool.")
     if observed.tool_calls < 1 or observed.tool_calls > MAX_SEARCHES:
         raise RuntimeError("The agent violated the frozen search tool-call budget.")
-    ids, invalid, missing, format_failure = extract_recommendation_ids(
+    ids, invalid, missing, format_failure = extract_ranked_product_ids(
         result.final_output, observed.returned_ids
     )
     return (
@@ -272,6 +273,7 @@ def _read_state(
             "version": CHECKPOINT_VERSION,
             "arm": arm,
             "task_id": task_id,
+            "model": MODEL if arm == "agent" else None,
             "query_ids": query_ids,
             "records": {},
             "failure_counts": {},
@@ -284,6 +286,7 @@ def _read_state(
         or state.get("version") != CHECKPOINT_VERSION
         or state.get("arm") != arm
         or state.get("task_id") != task_id
+        or state.get("model") != (MODEL if arm == "agent" else None)
         or state.get("query_ids") != query_ids
         or not isinstance(state.get("records"), dict)
         or not isinstance(state.get("failure_counts"), dict)
