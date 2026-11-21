@@ -123,6 +123,14 @@ class TPufStrategyTests(unittest.TestCase):
         self.assertIn("title__word_v4__es__stem_stop_fold", str(es_query["rank_by"]))
         self.assertIn("title__kuromoji__ja", str(jp_query["rank_by"]))
 
+    def test_rank_by_uses_lightly_weighted_product_fields(self) -> None:
+        rank_by = str(self.strategy.query("blue shoe", "us", top_k=10)["rank_by"])
+
+        self.assertIn("brand__word_v4__en__stem_stop", rank_by)
+        self.assertIn("bullet_point__word_v4__en__stem_stop", rank_by)
+        self.assertIn("color__word_v4__en__stem_stop", rank_by)
+        self.assertNotIn("category__word_v4__en__stem_stop", rank_by)
+
     def test_pretokenizer_handles_latin_and_japanese(self) -> None:
         self.assertEqual(
             self.strategy.pretokenize("A-B Café"),

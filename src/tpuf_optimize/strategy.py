@@ -17,6 +17,10 @@ class TPufStrategy:
 
     TITLE_WEIGHT = 2.0
     DESCRIPTION_WEIGHT = 1.0
+    BRAND_WEIGHT = 0.5
+    BULLET_POINT_WEIGHT = 0.05
+    CATEGORY_WEIGHT = 0.0
+    COLOR_WEIGHT = 0.3
 
     EMBEDDING_MODEL = "voyage/voyage-4"
     EMBEDDING_DIMS = 1024
@@ -288,26 +292,31 @@ class TPufStrategy:
             emitted += 1
 
     def rank_by(self, query_text: str, locale: str) -> RankBy:
-        """Build the locale-appropriate weighted title/description BM25 query."""
+        """Build locale-appropriate weighted BM25 clauses over product fields."""
         locale_analyzer = self.LOCALE_ANALYZERS.get(locale)
         suffix = (
             locale_analyzer[0]
             if locale_analyzer is not None
             else self.DEFAULT_ANALYZER
         )
+        weighted_fields = (
+            ("title", self.TITLE_WEIGHT),
+            ("description", self.DESCRIPTION_WEIGHT),
+            ("brand", self.BRAND_WEIGHT),
+            ("bullet_point", self.BULLET_POINT_WEIGHT),
+            ("category", self.CATEGORY_WEIGHT),
+            ("color", self.COLOR_WEIGHT),
+        )
         return (
             "Sum",
-            (
+            tuple(
                 (
                     "Product",
-                    self.TITLE_WEIGHT,
-                    (f"title__{suffix}", "BM25", query_text),
-                ),
-                (
-                    "Product",
-                    self.DESCRIPTION_WEIGHT,
-                    (f"description__{suffix}", "BM25", query_text),
-                ),
+                    weight,
+                    (f"{field}__{suffix}", "BM25", query_text),
+                )
+                for field, weight in weighted_fields
+                if weight > 0
             ),
         )
 
