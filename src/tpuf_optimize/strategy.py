@@ -4,11 +4,17 @@ from __future__ import annotations
 
 import math
 import unicodedata
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from typing import Any, cast
 
 import pandas as pd
-from turbopuffer.types import AttributeSchemaParam, DistanceMetric, RankBy, RowParam
+from turbopuffer.types import (
+    AttributeSchemaParam,
+    DistanceMetric,
+    RankBy,
+    Row,
+    RowParam,
+)
 from turbopuffer.types.namespace_multi_query_params import Query
 
 
@@ -17,6 +23,29 @@ class TPufStrategy:
 
     TITLE_WEIGHT = 2.0
     DESCRIPTION_WEIGHT = 1.0
+    HYBRID_CANDIDATE_DEPTH = 100
+
+    def __init__(
+        self,
+        hybrid_weights: tuple[float, float] | None = (2.0, 1.0),
+        rank_constant: int = 10,
+    ) -> None:
+        if hybrid_weights is not None and (
+            len(hybrid_weights) != 2
+            or any(
+                not math.isfinite(weight) or weight < 0
+                for weight in hybrid_weights
+            )
+            or not any(weight > 0 for weight in hybrid_weights)
+        ):
+            raise ValueError(
+                "hybrid_weights must contain two finite non-negative weights, "
+                "not both zero"
+            )
+        if rank_constant < 0:
+            raise ValueError("rank_constant must not be negative")
+        self.hybrid_weights = hybrid_weights
+        self.rank_constant = rank_constant
 
     EMBEDDING_MODEL = "voyage/voyage-4"
     EMBEDDING_DIMS = 1024
@@ -289,6 +318,7 @@ class TPufStrategy:
 
     def rank_by(self, query_text: str, locale: str) -> RankBy:
         """Build the locale-appropriate weighted title/description BM25 query."""
+        locale = self.normalize_locale(locale)
         locale_analyzer = self.LOCALE_ANALYZERS.get(locale)
         suffix = (
             locale_analyzer[0]
@@ -311,6 +341,72 @@ class TPufStrategy:
             ),
         )
 
+    @staticmethod
+    def normalize_locale(locale: str) -> str:
+        """Map ESCI query locales to the locale codes stored in the index."""
+        return {
+            "en-US": "us",
+            "es-ES": "es",
+            "ja-JP": "jp",
+        }.get(locale, locale)
+
+    def hybrid_queries(
+        self, query_text: str, locale: str, top_k: int
+    ) -> tuple[Query, Query]:
+        """Return Voyage passage ANN and locale-specific lexical candidates."""
+        locale = self.normalize_locale(locale)
+        candidate_k = max(top_k, self.HYBRID_CANDIDATE_DEPTH)
+        lexical_query = self.query(query_text, locale, candidate_k)
+        vector_query: Query = {
+            "rank_by": (
+                "passage__embed__voyage_4",
+                "ANN",
+                ("Embed", query_text),
+            ),
+            "filters": ("locale", "Eq", locale),
+            "top_k": candidate_k,
+            "include_attributes": ["title", "description", "locale"],
+        }
+        return vector_query, lexical_query
+
+    @staticmethod
+    def reciprocal_rank_fusion(
+        ranked_lists: Iterable[list[Row]],
+        weights: Iterable[float] = (1.0, 1.0),
+        rank_constant: int = 10,
+        top_k: int = 10,
+    ) -> list[Row]:
+        """Fuse ranked lists with weighted reciprocal rank fusion."""
+        if rank_constant < 0:
+            raise ValueError("rank_constant must not be negative")
+        if top_k < 1:
+            raise ValueError("top_k must be greater than zero")
+        ranked_lists = list(ranked_lists)
+        weights = list(weights)
+        if len(ranked_lists) != len(weights):
+            raise ValueError("one RRF weight is required for each ranked list")
+        if any(not math.isfinite(weight) or weight < 0 for weight in weights):
+            raise ValueError("RRF weights must be finite and non-negative")
+        if not any(weight > 0 for weight in weights):
+            raise ValueError("at least one RRF weight must be greater than zero")
+
+        scores: dict[str, float] = {}
+        for ranked, weight in zip(ranked_lists, weights):
+            if weight == 0:
+                continue
+            for rank, row in enumerate(ranked, start=1):
+                document_id = str(row.id)
+                scores[document_id] = scores.get(document_id, 0.0) + (
+                    weight / (rank_constant + rank)
+                )
+
+        return [
+            Row.from_dict({"id": document_id, "$dist": score})
+            for document_id, score in sorted(
+                scores.items(), key=lambda item: item[1], reverse=True
+            )[:top_k]
+        ]
+
     def query(self, query_text: str, locale: str, top_k: int) -> Query:
         """Build one locale-filtered query for Turbopuffer's multi-query API."""
         if not query_text.strip():
@@ -319,6 +415,7 @@ class TPufStrategy:
             raise ValueError("locale must not be empty")
         if top_k < 1:
             raise ValueError("top_k must be greater than zero")
+        locale = self.normalize_locale(locale)
         return {
             "rank_by": self.rank_by(query_text, locale),
             "filters": ("locale", "Eq", locale),

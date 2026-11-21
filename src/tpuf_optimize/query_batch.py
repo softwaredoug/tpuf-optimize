@@ -80,6 +80,14 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--top-k", type=int, default=10)
     parser.add_argument("--batch-size", type=int, default=100)
+    parser.add_argument(
+        "--lexical-only",
+        action="store_true",
+        help="Disable hybrid fusion and use lexical BM25 only.",
+    )
+    parser.add_argument("--dense-weight", type=float, default=2.0)
+    parser.add_argument("--lexical-weight", type=float, default=1.0)
+    parser.add_argument("--rrf-constant", type=int, default=10)
     return parser
 
 
@@ -90,6 +98,12 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--top-k must be greater than zero")
     if args.batch_size < 1:
         parser.error("--batch-size must be greater than zero")
+    if args.rrf_constant < 0:
+        parser.error("--rrf-constant must not be negative")
+    if args.dense_weight < 0 or args.lexical_weight < 0:
+        parser.error("hybrid weights must not be negative")
+    if not args.lexical_only and args.dense_weight + args.lexical_weight == 0:
+        parser.error("at least one hybrid weight must be greater than zero")
     if not os.environ.get("TURBOPUFFER_API_KEY"):
         parser.error("Set TURBOPUFFER_API_KEY before querying.")
 
@@ -97,7 +111,16 @@ def main(argv: list[str] | None = None) -> int:
         requests = _read_queries(args.queries)
         with Turbopuffer(region=args.region) as client:
             namespace = client.namespace(args.namespace)
-            searcher = Searcher(namespace, TPufStrategy(), args.batch_size)
+            hybrid_weights = (
+                None
+                if args.lexical_only
+                else (args.dense_weight, args.lexical_weight)
+            )
+            strategy = TPufStrategy(
+                hybrid_weights=hybrid_weights,
+                rank_constant=args.rrf_constant,
+            )
+            searcher = Searcher(namespace, strategy, args.batch_size)
             _write_results(args.output, requests, searcher, args.top_k)
     except (OSError, ValueError) as error:
         parser.error(str(error))

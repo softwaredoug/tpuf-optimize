@@ -50,9 +50,20 @@ uv run query --queries queries.csv --output results.csv
 
 The batch command assigns query IDs (`q1`, `q2`, ...), applies the locale filter,
 and writes ranked document IDs and scores. Requests are sent in batches through
-Turbopuffer's multi-query API. Queries combine BM25 title and description scores,
-with title weighted twice as heavily. Queries with no hits are emitted with the
-`-1,-1,-1` sentinel row.
+Turbopuffer's multi-query API. By default, it fuses Voyage 4 passage ANN and
+lexical BM25 with weighted reciprocal-rank fusion; the lexical ranker combines
+title and description scores, with title weighted twice as heavily. Queries
+with no hits are emitted with the `-1,-1,-1` sentinel row.
+
+Hybrid search retrieves up to 100 candidates from each retriever.
+The default fusion weights are 2:1 (dense:lexical) with an RRF constant of 10;
+`--dense-weight`, `--lexical-weight`, and `--rrf-constant` can override them.
+Use `--lexical-only` to disable hybrid search.
+
+```sh
+uv run query --queries queries.csv --output results.csv \
+  --dense-weight 2 --lexical-weight 1
+```
 
 ## Search architecture
 

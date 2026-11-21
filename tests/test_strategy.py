@@ -5,6 +5,7 @@ from __future__ import annotations
 import unittest
 
 import pandas as pd
+from turbopuffer.types import Row
 
 from tpuf_optimize.strategy import TPufStrategy
 
@@ -118,10 +119,51 @@ class TPufStrategyTests(unittest.TestCase):
         us_query = self.strategy.query("blue shoe", "us", top_k=10)
         es_query = self.strategy.query("zapato azul", "es", top_k=10)
         jp_query = self.strategy.query("青い靴", "jp", top_k=10)
+        english_locale_query = self.strategy.query("blue shoe", "en-US", top_k=10)
 
         self.assertIn("title__word_v4__en__stem_stop", str(us_query["rank_by"]))
         self.assertIn("title__word_v4__es__stem_stop_fold", str(es_query["rank_by"]))
         self.assertIn("title__kuromoji__ja", str(jp_query["rank_by"]))
+        self.assertEqual(us_query, english_locale_query)
+
+    def test_hybrid_queries_use_voyage_passage_and_lexical_ranker(self) -> None:
+        strategy = TPufStrategy(hybrid_weights=(1.0, 2.0))
+        vector_query, lexical_query = strategy.hybrid_queries(
+            "blue shoe", "us", top_k=20
+        )
+
+        self.assertEqual(
+            vector_query["rank_by"],
+            ("passage__embed__voyage_4", "ANN", ("Embed", "blue shoe")),
+        )
+        self.assertEqual(vector_query["top_k"], 100)
+        self.assertIn("title__word_v4__en__stem_stop", str(lexical_query["rank_by"]))
+        self.assertEqual(strategy.hybrid_weights, (1.0, 2.0))
+
+    def test_hybrid_is_the_default_query_strategy(self) -> None:
+        self.assertEqual(TPufStrategy().hybrid_weights, (2.0, 1.0))
+        self.assertIsNone(TPufStrategy(hybrid_weights=None).hybrid_weights)
+
+    def test_reciprocal_rank_fusion_combines_rankings(self) -> None:
+        dense = [
+            Row.from_dict({"id": "shared", "$dist": 0.2}),
+            Row.from_dict({"id": "dense-only", "$dist": 0.3}),
+        ]
+        lexical = [
+            Row.from_dict({"id": "shared", "$dist": 0.5}),
+            Row.from_dict({"id": "lexical-only", "$dist": 0.4}),
+        ]
+
+        fused = TPufStrategy.reciprocal_rank_fusion(
+            [dense, lexical], weights=(1.0, 2.0), rank_constant=10, top_k=3
+        )
+
+        self.assertEqual([str(row.id) for row in fused], [
+            "shared",
+            "lexical-only",
+            "dense-only",
+        ])
+        self.assertAlmostEqual(fused[0]["$dist"], 1 / 11 + 2 / 11)
 
     def test_pretokenizer_handles_latin_and_japanese(self) -> None:
         self.assertEqual(

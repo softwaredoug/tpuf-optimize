@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import itertools
+import time
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from typing import Protocol
 
+from turbopuffer import RateLimitError
 from turbopuffer.types import Row
 from turbopuffer.types.namespace_multi_query_params import Query
 from turbopuffer.types.namespace_multi_query_response import NamespaceMultiQueryResponse
@@ -46,22 +48,54 @@ class Searcher:
         self.strategy = strategy
         self.batch_size = batch_size
 
+    def _multi_query(self, queries: list[Query]) -> NamespaceMultiQueryResponse:
+        """Retry transient model/query throttling with bounded backoff."""
+        for attempt in range(6):
+            try:
+                return self.namespace.multi_query(queries=queries)
+            except RateLimitError:
+                if attempt == 5:
+                    raise
+                time.sleep(15 * (attempt + 1))
+        raise AssertionError("unreachable")
+
     def search(
         self, requests: Iterable[SearchRequest], top_k: int
     ) -> Iterator[tuple[SearchRequest, list[Row]]]:
         """Yield each request with its rows, issuing one API call per batch."""
         iterator = iter(requests)
-        while request_batch := list(
-            itertools.islice(iterator, self.batch_size)
-        ):
-            queries = [
-                self.strategy.query(request.text, request.locale, top_k)
-                for request in request_batch
-            ]
-            response = self.namespace.multi_query(queries=queries)
-            if len(response.results) != len(request_batch):
+        hybrid = getattr(self.strategy, "hybrid_weights", None)
+        request_limit = min(self.batch_size, 8 if hybrid is not None else 16)
+        while request_batch := list(itertools.islice(iterator, request_limit)):
+            if hybrid is None:
+                query_groups = [
+                    (self.strategy.query(request.text, request.locale, top_k),)
+                    for request in request_batch
+                ]
+            else:
+                query_groups = [
+                    self.strategy.hybrid_queries(
+                        request.text, request.locale, top_k
+                    )
+                    for request in request_batch
+                ]
+            queries = [query for group in query_groups for query in group]
+            response = self._multi_query(queries)
+            if len(response.results) != len(queries):
                 raise ValueError(
                     "Turbopuffer returned a different number of results than queries"
                 )
-            for request, result in zip(request_batch, response.results):
-                yield request, result.rows or []
+            results = iter(response.results)
+            for request, group in zip(request_batch, query_groups):
+                rows = [result.rows or [] for result in itertools.islice(
+                    results, len(group)
+                )]
+                if hybrid is None:
+                    yield request, rows[0]
+                else:
+                    yield request, self.strategy.reciprocal_rank_fusion(
+                        rows,
+                        weights=hybrid,
+                        rank_constant=self.strategy.rank_constant,
+                        top_k=top_k,
+                    )
