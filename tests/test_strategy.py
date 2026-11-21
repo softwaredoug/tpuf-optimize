@@ -60,15 +60,22 @@ class TPufStrategyTests(unittest.TestCase):
         self.assertIn("title__kuromoji__ja", documents[2])
         self.assertNotIn("title__kuromoji__ja", documents[0])
 
-    def test_emits_alternative_tokenizers_and_embedding_views(self) -> None:
+    def test_emits_alternative_tokenizers_and_passage_embedding(self) -> None:
         document = next(self.strategy.documents(self.corpus.head(1)))
 
+        self.assertEqual(
+            document["passage"], "## Blue Shoe\n\nLight running shoe"
+        )
+        self.assertIn("passage__word_v4__default", document)
+        self.assertIn("passage__word_v4__en__stem_stop", document)
+        self.assertIn("passage__pretokenized_array__simple", document)
         self.assertIn("title__word_v2__default", document)
         self.assertIn("title__whitespace__default", document)
         self.assertIn("title__pretokenized_array__simple", document)
-        self.assertEqual(document["title__embed__voyage_4"], "Blue Shoe")
-        self.assertIn("Blue Shoe", document["product_text__embed__voyage_4"])
-        self.assertIn("Flexible sole", document["product_text__embed__voyage_4"])
+        self.assertEqual(
+            document["passage__embed__voyage_4"],
+            "## Blue Shoe\n\nLight running shoe",
+        )
 
     def test_schema_has_voyage_vectors_and_analyzer_variants(self) -> None:
         schema = self.strategy.schema
@@ -79,12 +86,32 @@ class TPufStrategyTests(unittest.TestCase):
             ],
             "spanish",
         )
+        self.assertIn("passage__word_v4__en__stem_stop", schema)
         self.assertEqual(
-            schema["title__embed__voyage_4"]["embed"]["model"],
+            schema["passage__embed__voyage_4"]["embed"]["model"],
             "voyage/voyage-4",
         )
         self.assertEqual(
-            schema["embedding__voyage_4__title"]["type"], "[1024]f16"
+            schema["embedding__voyage_4__passage"]["type"], "[1024]f16"
+        )
+
+    def test_passage_is_description_when_title_is_blank(self) -> None:
+        corpus = pd.DataFrame(
+            [
+                {
+                    "doc_id": "B002_us",
+                    "product_locale": "us",
+                    "title": " ",
+                    "description": "Only the description",
+                }
+            ]
+        )
+
+        document = next(self.strategy.documents(corpus))
+
+        self.assertEqual(document["passage"], "Only the description")
+        self.assertEqual(
+            document["passage__embed__voyage_4"], "Only the description"
         )
 
     def test_default_query_selects_locale_analyzer(self) -> None:

@@ -35,6 +35,7 @@ class TPufStrategy:
     DOCUMENT_COLUMNS_INVERSE = {
         source: name for name, source in DOCUMENT_COLUMNS.items()
     }
+    TEXT_FIELDS = (*TEXT_COLUMNS, "passage")
 
     # Analyzer suffixes follow:
     # logical_field__tokenizer__language__options.
@@ -92,6 +93,22 @@ class TPufStrategy:
             {"tokenizer": "word_v4", "b": 0.25},
             None,
         ),
+        "passage__word_v2__default": ("passage", {"tokenizer": "word_v2"}, None),
+        "passage__whitespace__default": (
+            "passage",
+            {"tokenizer": "whitespace"},
+            None,
+        ),
+        "passage__word_v4__fold": (
+            "passage",
+            {"tokenizer": "word_v4", "ascii_folding": True},
+            None,
+        ),
+        "passage__word_v4__b025": (
+            "passage",
+            {"tokenizer": "word_v4", "b": 0.25},
+            None,
+        ),
         "title__word_v4__fuzzy": (
             "title",
             {"tokenizer": "word_v4"},
@@ -102,15 +119,16 @@ class TPufStrategy:
             {"tokenizer": "word_v4"},
             "fuzzy",
         ),
+        "passage__word_v4__fuzzy": (
+            "passage",
+            {"tokenizer": "word_v4"},
+            "fuzzy",
+        ),
     }
-    PRETOKENIZED_FIELDS = ("title", "brand")
+    PRETOKENIZED_FIELDS = ("title", "brand", "passage")
 
     EMBEDDING_FIELDS = {
-        "title__embed__voyage_4": ("embedding__voyage_4__title", "title"),
-        "product_text__embed__voyage_4": (
-            "embedding__voyage_4__product",
-            "product",
-        ),
+        "passage__embed__voyage_4": ("embedding__voyage_4__passage", "passage"),
     }
 
     @property
@@ -131,7 +149,7 @@ class TPufStrategy:
         schema: dict[str, AttributeSchemaParam] = {
             "locale": {"type": "string", "filterable": True}
         }
-        for field in self.TEXT_COLUMNS:
+        for field in self.TEXT_FIELDS:
             # Raw source fields are returned to callers but are not separately indexed.
             schema[field] = {"type": "string", "filterable": False}
             schema[f"{field}__{self.DEFAULT_ANALYZER}"] = self._fts_schema(
@@ -235,8 +253,18 @@ class TPufStrategy:
                 if text is not None:
                     document[self.DOCUMENT_COLUMNS_INVERSE[source]] = text
 
+            title = str(document.get("title", ""))
+            description = str(document.get("description", ""))
+            passage = (
+                f"## {title}\n\n{description}".rstrip()
+                if title
+                else description
+            )
+            if passage:
+                document["passage"] = passage
+
             locale = str(document.get("locale", ""))
-            for field in self.TEXT_COLUMNS:
+            for field in self.TEXT_FIELDS:
                 text = str(document.get(field, ""))
                 if text:
                     document[f"{field}__{self.DEFAULT_ANALYZER}"] = text
@@ -253,26 +281,8 @@ class TPufStrategy:
                     str(document.get(field, ""))
                 )
 
-            title = str(document.get("title", ""))
-            description = str(document.get("description", ""))
-            brand = str(document.get("brand", ""))
-            bullet_point = str(document.get("bullet_point", ""))
-            category = str(document.get("category", ""))
-            color = str(document.get("color", ""))
-            product_text = " ".join(
-                value
-                for value in (
-                    title,
-                    brand,
-                    category,
-                    color,
-                    bullet_point,
-                    description,
-                )
-                if value
-            )
-            for source_name, (_vector_name, view) in self.EMBEDDING_FIELDS.items():
-                document[source_name] = title if view == "title" else product_text
+            for source_name, (_vector_name, source_field) in self.EMBEDDING_FIELDS.items():
+                document[source_name] = str(document.get(source_field, ""))
 
             yield cast(RowParam, document)
             emitted += 1

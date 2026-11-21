@@ -25,7 +25,8 @@ uv run index-esci --namespace esci-products --region gcp-us-central1
 ```
 
 The command uses `cheat_at_search.esci_data.corpus` and writes raw fields,
-analyzer-specific field copies, and Voyage 4 title/product embedding views.
+analyzer-specific field copies, a `passage` field, and one Voyage 4 embedding
+of that passage.
 Searchable names use `logical_field__tokenizer__language__options`, such as
 `title__word_v4__es__stem_stop_fold` and `title__kuromoji__ja`. It includes
 `word_v4`, `word_v2`, whitespace, pre-tokenized, fuzzy, and BM25 length
