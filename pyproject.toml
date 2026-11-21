@@ -15,6 +15,7 @@ dependencies = [
 [project.scripts]
 index-esci = "tpuf_optimize.index_esci:main"
 query = "tpuf_optimize.query_batch:main"
+collect-training-candidates = "tpuf_optimize.training_collector:main"
 
 [dependency-groups]
 dev = [

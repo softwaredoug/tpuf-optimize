@@ -54,6 +54,23 @@ Turbopuffer's multi-query API. Queries combine BM25 title and description scores
 with title weighted twice as heavily. Queries with no hits are emitted with the
 `-1,-1,-1` sentinel row.
 
+## Collect training candidates
+
+`collect-training-candidates` reads the training task saved under the OpenCode
+temporary directory (or creates it using the training-only token file), then
+collects top-100 Voyage-4 ANN and parent BM25 lists one query at a time. It
+checkpoints each completed query to `*.partial` and atomically writes the final
+JSONL cache only after coverage is complete. Resume with the same task and
+checkpoint paths. Do not commit task/query/cache artifacts.
+
+```sh
+uv run collect-training-candidates
+```
+
+Use `--evaluate-parent-rrf` to create a separate training Referee task, verify
+that its query IDs match the cache, and submit the parent's 2:1 RRF (rank
+constant 10, top 10) for an NDCG baseline.
+
 ## Search architecture
 
 `TPufStrategy` owns the ESCI document mapping, namespace schema, and query
