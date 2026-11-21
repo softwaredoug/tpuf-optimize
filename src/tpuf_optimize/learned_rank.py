@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-RRF_K = 60
+RRF_K = 10
 FEATURE_NAMES = (
     "dense_present",
     "lexical_present",
@@ -188,7 +188,7 @@ def read_grades(path: Path) -> dict[str, dict[str, float]]:
 
 
 def rrf_score(candidate: Candidate, dense_weight: float = 2.0) -> float:
-    """Weighted reciprocal-rank fusion; absent source ranks contribute zero."""
+    """Match the repository comparator: 2:1 weights and one-based RRF k=10."""
     dense = (
         dense_weight / (RRF_K + candidate.dense_rank)
         if candidate.dense_rank is not None
@@ -205,10 +205,15 @@ def rrf_score(candidate: Candidate, dense_weight: float = 2.0) -> float:
 def rrf_ranking(
     group: QueryCandidates, dense_weight: float = 2.0
 ) -> list[tuple[Candidate, float]]:
-    """Return the deterministic weighted-RRF baseline for a candidate group."""
+    """Return weighted RRF, preserving dense-first insertion on exact ties.
+
+    Candidate mapping order is dense ranked-list order followed by lexical-only
+    documents, matching ``TPufStrategy.reciprocal_rank_fusion``'s stable sort.
+    """
     return sorted(
         ((candidate, rrf_score(candidate, dense_weight)) for candidate in group.candidates),
-        key=lambda pair: (-pair[1], pair[0].doc_id),
+        key=lambda pair: pair[1],
+        reverse=True,
     )
 
 

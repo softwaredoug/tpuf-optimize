@@ -77,7 +77,9 @@ Features use retrieval ranks/scores and query/title token coverage only; query
 and document IDs are join/tie-break keys, not model features. Pairwise fitting
 uses unequal positive-grade pairs, so grade zero is never treated as a negative.
 The command compares validation NDCG for its reranker and the deterministic
-dense:lexical 2:1 reciprocal-rank-fusion baseline on identical candidate sets.
+dense:lexical 2:1 reciprocal-rank-fusion baseline (one-based ranks, constant 10,
+stable dense-first tie order) on identical candidate sets. The model's RRF
+feature uses this same comparator.
 It also reports a candidate-set oracle on training queries only as a diagnostic;
 the oracle is not used to produce rankings. Unjudged/zero-grade documents do
 not contribute gain in the NDCG calculation.

@@ -90,9 +90,52 @@ class LearnedRankTests(unittest.TestCase):
         ranking = rrf_ranking(group)
         self.assertEqual([item.doc_id for item, _score in ranking], ["bad-2", "good-2"])
         self.assertAlmostEqual(
-            ranking[0][1], 2 / 61 + 1 / 62
+            ranking[0][1], 2 / 11 + 1 / 12
         )
         self.assertEqual(ranking, rrf_ranking(group))
+
+    def test_rrf_exact_parent_comparator_parity_including_ties(self) -> None:
+        """Match TPufStrategy's 2:1, k=10, dense-first stable tie ordering."""
+        record = {
+            "query_id": "tie-case",
+            "query_text": "test",
+            "locale": "en-US",
+            "dense": [
+                {"doc_id": f"dense-{rank:02d}", "score": 1.0, "title": ""}
+                for rank in range(1, 13)
+            ],
+            "lexical": [{"doc_id": "lexical-only", "score": 1.0, "title": ""}],
+        }
+        group = parse_query_record(record)
+
+        # This mirrors TPufStrategy.reciprocal_rank_fusion: source lists are
+        # consumed dense first, ranks are one based, and reverse sort is stable.
+        reference_scores: dict[str, float] = {}
+        for source, weight in (
+            (record["dense"], 2.0),
+            (record["lexical"], 1.0),
+        ):
+            for rank, item in enumerate(source, start=1):
+                doc_id = str(item["doc_id"])
+                reference_scores[doc_id] = reference_scores.get(doc_id, 0.0) + (
+                    weight / (10 + rank)
+                )
+        reference = sorted(
+            reference_scores.items(), key=lambda item: item[1], reverse=True
+        )
+        actual = [(candidate.doc_id, score) for candidate, score in rrf_ranking(group)]
+        self.assertEqual(actual, reference)
+        self.assertEqual(actual[-2][0], "dense-12")
+        self.assertEqual(actual[-1][0], "lexical-only")
+        self.assertAlmostEqual(actual[-2][1], actual[-1][1])
+
+        # The model's RRF feature uses exactly the same score as the baseline.
+        vectors = feature_vectors(group)
+        for candidate, score in rrf_ranking(group):
+            self.assertAlmostEqual(
+                vectors[candidate.doc_id][FEATURE_NAMES.index("rrf_2_1")],
+                score,
+            )
 
     def test_pairwise_fit_ignores_grade_zero_as_negative(self) -> None:
         groups = _groups(2)
