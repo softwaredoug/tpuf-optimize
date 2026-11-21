@@ -108,3 +108,18 @@ All three rankers use the same deterministic query-disjoint train/validation
 fold and identical candidate lists. The experiment writes validation CSVs,
 weight artifacts, and an aggregate report; labels never enter feature
 extraction or ranking.
+
+To obtain labels only for the assigned training split, the debug collector
+submits candidate IDs to Referee's read-only `/debug` endpoint in serial
+10-query batches, using the configured training-only task and bearer token.
+It checkpoints each batch and writes grade/target JSONL under the approved
+temporary output prefix; it never completes a task:
+
+```sh
+uv run collect-training-judgments
+uv run rank-computed-features \
+  --candidates /path/to/esci_research_training_idfiltered_candidates.jsonl \
+  --grades /path/to/esci_research_training_idfiltered_grades.jsonl \
+  --targets /path/to/esci_research_training_idfiltered_targets.jsonl \
+  --output-dir /path/to/ablation
+```
