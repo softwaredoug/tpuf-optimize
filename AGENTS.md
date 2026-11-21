@@ -150,7 +150,25 @@ Variants to measure
 While caching may be used during simple evaluation of NDCG, no cache should be used during this final benchmark
 as we want realistic, cold latency. That means given the above numbers, we would have (10 + 2) * 5000 queries.
 
-Report NDCG@10 and per-query latency summaries in the README leaderboard.
+On HTTP 429, retry the query and record latency only for the successful attempt.
+
+When batching queries, record the batch latency divided by the number of queries in the batch
+as the amortized latency for each query.
+
+The output should be:
+
+- A README table detailing each variant, with column for NDCG@10, p50, p95 latency
+- A pareto graph showing NDCG@10 vs p95 latency for each variant
+- A second pareto graph showing NDCG@10 vs p50 latency for each variant
+
+Implement whatever is needed in scripts/ to generate this so agents don't need to regenerate code.
+
+This may involve generating a script, then going to each branch, merging in the script and / or updating
+query code around the relevance implementation to standardize it, and then executing each
+branch's relevance one at a time.
+
+We don't want to delegate this to subagents also doing optimization on training, as that would leak
+this benchmark split.
 
 ## Keep looping
 
