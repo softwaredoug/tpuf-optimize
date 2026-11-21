@@ -17,8 +17,8 @@ class ProductRerankTests(unittest.TestCase):
         )
 
         by_id = {row["doc_id"]: row for row in results}
-        self.assertAlmostEqual(by_id["a"]["rrf_score"], 2 / 61 + 1 / 62)
-        self.assertAlmostEqual(by_id["b"]["rrf_score"], 2 / 62 + 1 / 61)
+        self.assertAlmostEqual(by_id["a"]["rrf_score"], 2 / 11 + 1 / 12)
+        self.assertAlmostEqual(by_id["b"]["rrf_score"], 2 / 12 + 1 / 11)
         # Backend score scales are intentionally ignored; rank is the fusion input.
         self.assertEqual(len(results), 2)
 
@@ -51,7 +51,49 @@ class ProductRerankTests(unittest.TestCase):
         )
         self.assertTrue(all(row["rerank_adjustment"] == 0 for row in parent_order))
 
-    def test_title_order_coverage_and_proximity_help_exact_title(self) -> None:
+    def test_zero_adjustment_matches_exact_parent_rrf_and_dense_first_ties(
+        self,
+    ) -> None:
+        dense = [
+            {"doc_id": "shared"},
+            {"doc_id": "dense-only"},
+            {"doc_id": "tie-a"},
+            {"doc_id": "tie-b"},
+        ]
+        lexical = [
+            {"doc_id": "shared"},
+            {"doc_id": "lexical-only"},
+            {"doc_id": "tie-b"},
+            {"doc_id": "tie-a"},
+        ]
+        # Direct offline transcription of TPufStrategy.reciprocal_rank_fusion
+        # at the accepted parent's weights and rank constant.
+        parent_scores: dict[str, float] = {}
+        for ranked, weight in ((dense, 2.0), (lexical, 1.0)):
+            for rank, row in enumerate(ranked, start=1):
+                doc_id = str(row["doc_id"])
+                parent_scores[doc_id] = parent_scores.get(doc_id, 0.0) + (
+                    weight / (10 + rank)
+                )
+        parent_rows = sorted(
+            parent_scores.items(), key=lambda item: item[1], reverse=True
+        )
+
+        results = rerank_candidates(
+            "plain query", "us", dense, lexical, max_adjustment=0
+        )
+
+        self.assertEqual(
+            [(row["doc_id"], row["score"]) for row in results],
+            parent_rows,
+        )
+        self.assertEqual(
+            [row["doc_id"] for row in results if row["doc_id"].startswith("tie-")],
+            ["tie-a", "tie-b"],
+        )
+        self.assertTrue(all(row["rrf_score"] == row["score"] for row in results))
+
+    def test_title_order_coverage_and_proximity_reward_exact_title(self) -> None:
         results = rerank_candidates(
             "red running shoes",
             "us",
@@ -62,10 +104,13 @@ class ProductRerankTests(unittest.TestCase):
             ],
         )
 
-        self.assertEqual(results[0]["doc_id"], "exact")
-        self.assertGreater(results[0]["rerank_adjustment"], results[1]["rerank_adjustment"])
+        by_id = {row["doc_id"]: row for row in results}
+        self.assertGreater(
+            by_id["exact"]["rerank_adjustment"],
+            by_id["near"]["rerank_adjustment"],
+        )
 
-    def test_matching_units_and_model_code_beat_conflicting_specs(self) -> None:
+    def test_matching_units_and_model_code_reward_exact_specs(self) -> None:
         results = rerank_candidates(
             "Acme X120 12 oz bottle",
             "us",
@@ -76,8 +121,11 @@ class ProductRerankTests(unittest.TestCase):
             ],
         )
 
-        self.assertEqual(results[0]["doc_id"], "good")
-        self.assertGreater(results[0]["rerank_adjustment"], results[1]["rerank_adjustment"])
+        by_id = {row["doc_id"]: row for row in results}
+        self.assertGreater(
+            by_id["good"]["rerank_adjustment"],
+            by_id["bad"]["rerank_adjustment"],
+        )
 
     def test_missing_specifications_and_attributes_are_not_demoted(self) -> None:
         results = rerank_candidates(
@@ -142,8 +190,16 @@ class ProductRerankTests(unittest.TestCase):
             ],
         )
 
-        self.assertEqual(unicode_results[0]["doc_id"], "right")
-        self.assertEqual(japanese_results[0]["doc_id"], "exact")
+        unicode_by_id = {row["doc_id"]: row for row in unicode_results}
+        japanese_by_id = {row["doc_id"]: row for row in japanese_results}
+        self.assertGreater(
+            unicode_by_id["right"]["rerank_adjustment"],
+            unicode_by_id["wrong"]["rerank_adjustment"],
+        )
+        self.assertGreater(
+            japanese_by_id["exact"]["rerank_adjustment"],
+            japanese_by_id["partial"]["rerank_adjustment"],
+        )
 
     def test_is_bounded_stable_deduplicated_and_does_not_mutate_inputs(self) -> None:
         lexical = [

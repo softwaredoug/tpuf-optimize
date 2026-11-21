@@ -127,7 +127,9 @@ def _rrf(
 ) -> tuple[dict[str, float], dict[str, dict[str, Any]]]:
     scores: dict[str, float] = {}
     documents: dict[str, dict[str, Any]] = {}
-    for rows, weight in ((lexical, lexical_weight), (dense, dense_weight)):
+    # Match the parent RRF's insertion order: dense candidates establish stable
+    # tie order, and lexical-only candidates follow them.
+    for rows, weight in ((dense, dense_weight), (lexical, lexical_weight)):
         seen: set[str] = set()
         for rank, row in enumerate(rows, start=1):
             doc_id = str(row.get("doc_id", row.get("id", "")))
@@ -269,7 +271,7 @@ def rerank_candidates(
     top_k: int | None = None,
     lexical_weight: float = 1.0,
     dense_weight: float = 2.0,
-    rank_constant: int = 60,
+    rank_constant: int = 10,
     max_adjustment: float = 0.012,
 ) -> list[dict[str, Any]]:
     """Fuse a dense/lexical union and apply bounded product-title evidence.
@@ -282,8 +284,8 @@ def rerank_candidates(
     """
     if not query_text.strip():
         raise ValueError("query_text must not be empty")
-    if rank_constant < 1:
-        raise ValueError("rank_constant must be positive")
+    if rank_constant < 0:
+        raise ValueError("rank_constant must not be negative")
     if lexical_weight < 0 or dense_weight < 0 or lexical_weight + dense_weight == 0:
         raise ValueError("fusion weights must be nonnegative and not both zero")
     if max_adjustment < 0 or not math.isfinite(max_adjustment):
@@ -321,5 +323,7 @@ def rerank_candidates(
         result["score"] = base_score + adjustment
         results.append(result)
 
-    results.sort(key=lambda result: (-result["score"], str(result["doc_id"])))
+    # Stable sort preserves dense-first candidate insertion order for ties, as
+    # the parent's reciprocal_rank_fusion does.
+    results.sort(key=lambda result: -result["score"])
     return results if top_k is None else results[: max(0, top_k)]
