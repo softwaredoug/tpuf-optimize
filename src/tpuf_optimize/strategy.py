@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import re
 import unicodedata
 from collections.abc import Iterator
 from typing import Any, cast
@@ -17,6 +18,30 @@ class TPufStrategy:
 
     TITLE_WEIGHT = 2.0
     DESCRIPTION_WEIGHT = 1.0
+    MAX_BINARY_PRESENCE_TERMS = 16
+    _QUERY_WORD = re.compile(r"[^\W_]+", re.UNICODE)
+
+    # These locales remove stopwords in their locale-specific indexed fields.
+    # Keep the client-side predicate list intentionally conservative: the
+    # token predicates are scored independently, so stopwords must not receive
+    # a score merely because the index analyzer discarded them.
+    _STOPWORDS = {
+        "us": frozenset(
+            """
+            a an and are as at be by for from in is it of on or that the to
+            with
+            """.split()
+        ),
+        "es": frozenset(
+            """
+            a al algo algunas algunos ante antes como con contra cual cuando
+            de del desde donde durante e el ella ellas ellos en entre era es
+            esa esas ese eso esos esta estaba estado estas este esto estos
+            fue ha hasta hay la las le les lo los mas me mi muy ni no nos o
+            para pero por que se sin sobre su sus te tu un una uno unos y ya
+            """.split()
+        ),
+    }
 
     EMBEDDING_MODEL = "voyage/voyage-4"
     EMBEDDING_DIMS = 1024
@@ -308,6 +333,108 @@ class TPufStrategy:
                     self.DESCRIPTION_WEIGHT,
                     (f"description__{suffix}", "BM25", query_text),
                 ),
+            ),
+        )
+
+    @classmethod
+    def binary_presence_terms(cls, query_text: str, locale: str) -> list[str]:
+        """Return bounded, distinct query terms for the binary-presence arm.
+
+        Japanese uses dictionary-based Kuromoji segmentation in the index.
+        This module has no equivalent client-side dictionary, so it declines
+        that arm rather than splitting Japanese into misleading codepoints.
+        """
+        if locale == "jp":
+            return []
+
+        normalized = unicodedata.normalize("NFKC", query_text).casefold()
+        stopwords = cls._STOPWORDS.get(locale, frozenset())
+        terms: list[str] = []
+        seen: set[str] = set()
+        for match in cls._QUERY_WORD.finditer(normalized):
+            term = match.group()
+            if term in stopwords or term in seen:
+                continue
+            seen.add(term)
+            terms.append(term)
+            if len(terms) == cls.MAX_BINARY_PRESENCE_TERMS:
+                break
+        return terms
+
+    def binary_presence_query(
+        self, query_text: str, locale: str, top_k: int
+    ) -> Query | None:
+        """Build whole-namespace lexical candidate retrieval without BM25.
+
+        Each distinct query term contributes max(2 * title_presence,
+        passage_presence), then the term contributions are summed. This is a
+        retrieval query, not a candidate-ID-constrained reranker.
+
+        Return ``None`` when client-side analysis cannot safely construct
+        predicates (empty/stopword-only input or Japanese Kuromoji input); the
+        caller should then use its normal retrieval arm. This avoids issuing
+        a query whose clauses all score zero.
+        """
+        if not query_text.strip():
+            raise ValueError("query_text must not be empty")
+        if not locale.strip():
+            raise ValueError("locale must not be empty")
+        if top_k < 1:
+            raise ValueError("top_k must be greater than zero")
+
+        terms = self.binary_presence_terms(query_text, locale)
+        if not terms:
+            return None
+
+        locale_analyzer = self.LOCALE_ANALYZERS.get(locale)
+        suffix = (
+            locale_analyzer[0]
+            if locale_analyzer is not None
+            else self.DEFAULT_ANALYZER
+        )
+        title_field = f"title__{suffix}"
+        passage_field = f"passage__{suffix}"
+        clauses: list[RankBy] = []
+        for term in terms:
+            clauses.append(
+                (
+                    "Max",
+                    [
+                        (
+                            "Product",
+                            self.TITLE_WEIGHT,
+                            (title_field, "ContainsAllTokens", term),
+                        ),
+                        (passage_field, "ContainsAllTokens", term),
+                    ],
+                )
+            )
+
+        return {
+            "rank_by": ("Sum", clauses),
+            "filters": ("locale", "Eq", locale),
+            "top_k": top_k,
+            "include_attributes": ["title", "description", "locale"],
+        }
+
+    @staticmethod
+    def sort_binary_presence_rows(rows: list[Any]) -> list[Any]:
+        """Stably order returned rows by score, then document ID.
+
+        Composite rank expressions do not accept an attribute tie-breaker.
+        This makes ties deterministic within the returned candidate pool;
+        callers needing deterministic cutoff ties should overfetch before
+        truncating locally.
+        """
+        return sorted(
+            rows,
+            key=lambda row: (
+                -float(
+                    row["$dist"]
+                    if hasattr(row, "__getitem__")
+                    else getattr(row, "$dist")
+                ),
+                str(row.id),
             ),
         )
 

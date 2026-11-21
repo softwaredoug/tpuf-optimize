@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
 
 import pandas as pd
 
@@ -129,6 +130,110 @@ class TPufStrategyTests(unittest.TestCase):
             ["a", "b", "café"],
         )
         self.assertEqual(self.strategy.pretokenize("青い靴"), ["青", "い", "靴"])
+
+    def test_binary_presence_query_sums_token_predicates_not_bm25(self) -> None:
+        query = self.strategy.binary_presence_query(
+            "Blue shoe BLUE the", "us", top_k=25
+        )
+
+        self.assertIsNotNone(query)
+        assert query is not None
+        self.assertEqual(query["filters"], ("locale", "Eq", "us"))
+        self.assertEqual(query["top_k"], 25)
+        self.assertEqual(
+            query["include_attributes"], ["title", "description", "locale"]
+        )
+        rank_by = query["rank_by"]
+        self.assertEqual(rank_by[0], "Sum")
+        clauses = rank_by[1]
+        self.assertEqual(
+            clauses,
+            [
+                (
+                    "Max",
+                    [
+                        (
+                            "Product",
+                            2.0,
+                            (
+                                "title__word_v4__en__stem_stop",
+                                "ContainsAllTokens",
+                                "blue",
+                            ),
+                        ),
+                        (
+                            "passage__word_v4__en__stem_stop",
+                            "ContainsAllTokens",
+                            "blue",
+                        ),
+                    ],
+                ),
+                (
+                    "Max",
+                    [
+                        (
+                            "Product",
+                            2.0,
+                            (
+                                "title__word_v4__en__stem_stop",
+                                "ContainsAllTokens",
+                                "shoe",
+                            ),
+                        ),
+                        (
+                            "passage__word_v4__en__stem_stop",
+                            "ContainsAllTokens",
+                            "shoe",
+                        ),
+                    ],
+                ),
+            ],
+        )
+        self.assertNotIn("BM25", str(rank_by))
+
+    def test_binary_presence_query_guards_empty_stopwords_and_japanese(self) -> None:
+        self.assertIsNone(
+            self.strategy.binary_presence_query("the and", "us", top_k=10)
+        )
+        self.assertIsNone(
+            self.strategy.binary_presence_query("青い靴", "jp", top_k=10)
+        )
+        self.assertIsNone(
+            self.strategy.binary_presence_query("...", "us", top_k=10)
+        )
+        with self.assertRaises(ValueError):
+            self.strategy.binary_presence_query("   ", "us", top_k=10)
+
+    def test_binary_presence_query_uses_locale_specific_passage_field(self) -> None:
+        query = self.strategy.binary_presence_query("zapato blanco", "es", 10)
+
+        self.assertIsNotNone(query)
+        assert query is not None
+        rank_by = query["rank_by"]
+        self.assertIn("title__word_v4__es__stem_stop_fold", str(rank_by))
+        self.assertIn("passage__word_v4__es__stem_stop_fold", str(rank_by))
+
+    def test_binary_presence_terms_are_unique_and_clause_bounded(self) -> None:
+        duplicate_terms = self.strategy.binary_presence_terms(
+            "Café cafe\u0301 shoe shoe", "us"
+        )
+        self.assertEqual(duplicate_terms, ["café", "shoe"])
+
+        long_query = " ".join(f"word{index}" for index in range(25))
+        terms = self.strategy.binary_presence_terms(long_query, "us")
+        self.assertEqual(len(terms), self.strategy.MAX_BINARY_PRESENCE_TERMS)
+
+    def test_binary_presence_rows_sort_ties_by_document_id(self) -> None:
+        rows = [
+            SimpleNamespace(id="z", **{"$dist": 3.0}),
+            SimpleNamespace(id="b", **{"$dist": 2.0}),
+            SimpleNamespace(id="a", **{"$dist": 2.0}),
+            SimpleNamespace(id="x", **{"$dist": 1.0}),
+        ]
+
+        sorted_rows = self.strategy.sort_binary_presence_rows(rows)
+
+        self.assertEqual([row.id for row in sorted_rows], ["z", "a", "b", "x"])
 
 
 if __name__ == "__main__":
