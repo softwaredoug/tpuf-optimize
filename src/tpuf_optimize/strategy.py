@@ -4,11 +4,17 @@ from __future__ import annotations
 
 import math
 import unicodedata
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from typing import Any, cast
 
 import pandas as pd
-from turbopuffer.types import AttributeSchemaParam, DistanceMetric, RankBy, RowParam
+from turbopuffer.types import (
+    AttributeSchemaParam,
+    DistanceMetric,
+    RankBy,
+    Row,
+    RowParam,
+)
 from turbopuffer.types.namespace_multi_query_params import Query
 
 
@@ -17,6 +23,9 @@ class TPufStrategy:
 
     TITLE_WEIGHT = 2.0
     DESCRIPTION_WEIGHT = 1.0
+    HYBRID_CANDIDATE_DEPTH = 100
+    HYBRID_WEIGHTS = (2.0, 1.0)
+    RANK_CONSTANT = 10
 
     EMBEDDING_MODEL = "voyage/voyage-4"
     EMBEDDING_DIMS = 1024
@@ -130,6 +139,10 @@ class TPufStrategy:
     EMBEDDING_FIELDS = {
         "passage__embed__voyage_4": ("embedding__voyage_4__passage", "passage"),
     }
+
+    def __init__(self) -> None:
+        self.hybrid_weights = self.HYBRID_WEIGHTS
+        self.rank_constant = self.RANK_CONSTANT
 
     @property
     def distance_metric(self) -> DistanceMetric:
@@ -289,6 +302,7 @@ class TPufStrategy:
 
     def rank_by(self, query_text: str, locale: str) -> RankBy:
         """Build the locale-appropriate weighted title/description BM25 query."""
+        locale = self.normalize_locale(locale)
         locale_analyzer = self.LOCALE_ANALYZERS.get(locale)
         suffix = (
             locale_analyzer[0]
@@ -311,6 +325,94 @@ class TPufStrategy:
             ),
         )
 
+    @staticmethod
+    def normalize_locale(locale: str) -> str:
+        """Map common ESCI locale names to the locale codes stored in the index."""
+        return {
+            "en-US": "us",
+            "es-ES": "es",
+            "ja-JP": "jp",
+        }.get(locale, locale)
+
+    def retrieval_queries(
+        self, query_text: str, locale: str, top_k: int
+    ) -> tuple[Query, Query, Query]:
+        """Return dense, parent lexical, and passage lexical candidate arms."""
+        if not query_text.strip():
+            raise ValueError("query_text must not be empty")
+        if not locale.strip():
+            raise ValueError("locale must not be empty")
+        if top_k < 1:
+            raise ValueError("top_k must be greater than zero")
+
+        index_locale = self.normalize_locale(locale)
+        candidate_k = max(top_k, self.HYBRID_CANDIDATE_DEPTH)
+        lexical_query = self.query(query_text, index_locale, candidate_k)
+        suffix = (
+            self.LOCALE_ANALYZERS[index_locale][0]
+            if index_locale in self.LOCALE_ANALYZERS
+            else self.DEFAULT_ANALYZER
+        )
+        passage_query: Query = {
+            "rank_by": (f"passage__{suffix}", "BM25", query_text),
+            "filters": ("locale", "Eq", index_locale),
+            "top_k": candidate_k,
+            "include_attributes": ["title", "description", "locale"],
+        }
+        dense_query: Query = {
+            "rank_by": (
+                "passage__embed__voyage_4",
+                "ANN",
+                ("Embed", query_text),
+            ),
+            "filters": ("locale", "Eq", index_locale),
+            "top_k": candidate_k,
+            "include_attributes": ["title", "description", "locale"],
+        }
+        # Preserve the parent arm order for tie-breaking: dense first, then
+        # its original title/description BM25 arm, then the correlated variant.
+        return dense_query, lexical_query, passage_query
+
+    def fuse(
+        self, ranked_lists: Iterable[list[Row]], top_k: int
+    ) -> list[Row]:
+        """Fuse dense RRF with a lexical family capped at its best member."""
+        lists = list(ranked_lists)
+        if len(lists) != 3:
+            raise ValueError("the retrieval plan requires exactly three result lists")
+        if top_k < 1:
+            raise ValueError("top_k must be greater than zero")
+        dense_weight, lexical_weight = self.hybrid_weights
+
+        # Dict insertion order encodes the parent's dense-first tie behavior,
+        # followed by the original lexical arm's order.
+        order: dict[str, None] = {}
+        scores: dict[str, float] = {}
+        for rank, row in enumerate(lists[0], start=1):
+            document_id = str(row.id)
+            order.setdefault(document_id, None)
+            scores[document_id] = dense_weight / (self.rank_constant + rank)
+
+        lexical_scores: dict[str, float] = {}
+        for ranked in lists[1:]:
+            for rank, row in enumerate(ranked, start=1):
+                document_id = str(row.id)
+                order.setdefault(document_id, None)
+                contribution = lexical_weight / (self.rank_constant + rank)
+                lexical_scores[document_id] = max(
+                    lexical_scores.get(document_id, 0.0), contribution
+                )
+
+        for document_id, contribution in lexical_scores.items():
+            scores[document_id] = scores.get(document_id, 0.0) + contribution
+
+        return [
+            Row.from_dict({"id": document_id, "$dist": scores[document_id]})
+            for document_id in sorted(
+                order, key=lambda document_id: scores[document_id], reverse=True
+            )[:top_k]
+        ]
+
     def query(self, query_text: str, locale: str, top_k: int) -> Query:
         """Build one locale-filtered query for Turbopuffer's multi-query API."""
         if not query_text.strip():
@@ -319,6 +421,7 @@ class TPufStrategy:
             raise ValueError("locale must not be empty")
         if top_k < 1:
             raise ValueError("top_k must be greater than zero")
+        locale = self.normalize_locale(locale)
         return {
             "rank_by": self.rank_by(query_text, locale),
             "filters": ("locale", "Eq", locale),

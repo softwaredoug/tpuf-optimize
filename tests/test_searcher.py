@@ -58,7 +58,8 @@ class SearcherTests(unittest.TestCase):
         )
 
         self.assertEqual(len(results), 17)
-        self.assertEqual(namespace.batch_sizes, [16, 1])
+        # Three retrieval arms per request; 5 logical queries fit (15 arms).
+        self.assertEqual(namespace.batch_sizes, [15, 15, 15, 6])
         self.assertEqual(namespace.serial_calls, 0)
 
     def test_retries_rate_limited_batch_then_uses_serial_api(self) -> None:
@@ -86,7 +87,7 @@ class SearcherTests(unittest.TestCase):
 
         self.assertEqual(len(namespace.batch_sizes), 10)
         self.assertEqual(sum(sleep_durations), 300.0)
-        self.assertEqual(namespace.serial_calls, 2)
+        self.assertEqual(namespace.serial_calls, 6)
         self.assertEqual(len(results), 2)
         self.assertTrue(all(result_rows for _, result_rows in results))
 

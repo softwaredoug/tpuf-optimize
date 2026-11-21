@@ -5,6 +5,7 @@ from __future__ import annotations
 import unittest
 
 import pandas as pd
+from turbopuffer.types import Row
 
 from tpuf_optimize.strategy import TPufStrategy
 
@@ -122,6 +123,48 @@ class TPufStrategyTests(unittest.TestCase):
         self.assertIn("title__word_v4__en__stem_stop", str(us_query["rank_by"]))
         self.assertIn("title__word_v4__es__stem_stop_fold", str(es_query["rank_by"]))
         self.assertIn("title__kuromoji__ja", str(jp_query["rank_by"]))
+
+    def test_retrieval_plan_has_dense_parent_and_passage_lexical_arms(self) -> None:
+        original = "USB-C adapter"
+        dense, lexical, passage = self.strategy.retrieval_queries(
+            original, "en-US", top_k=10
+        )
+
+        self.assertEqual(
+            dense["rank_by"],
+            ("passage__embed__voyage_4", "ANN", ("Embed", original)),
+        )
+        self.assertIn(original, str(lexical["rank_by"]))
+        self.assertEqual(
+            passage["rank_by"],
+            ("passage__word_v4__en__stem_stop", "BM25", original),
+        )
+        for query in (dense, lexical, passage):
+            self.assertEqual(query["filters"], ("locale", "Eq", "us"))
+            self.assertEqual(query["top_k"], 100)
+
+    def test_fusion_caps_correlated_lexical_arms_and_keeps_dense_first_ties(self) -> None:
+        dense_rows = [
+            Row.from_dict({"id": f"dense-{rank}"})
+            for rank in range(1, 12)
+        ]
+        dense_rows.append(Row.from_dict({"id": "dense-tie"}))
+        rows = self.strategy.fuse(
+            [
+                dense_rows,
+                [Row.from_dict({"id": "lex-tie"}), Row.from_dict({"id": "both"})],
+                [Row.from_dict({"id": "both"}), Row.from_dict({"id": "passage"})],
+            ],
+            top_k=20,
+        )
+
+        # Dense rank 12 and lexical rank 1 tie under the parent 2:1 weights.
+        # Stable ordering remains dense-first. "both" gets one lexical-family
+        # contribution, not a sum from its two correlated arms.
+        ids = [row.id for row in rows]
+        self.assertLess(ids.index("dense-tie"), ids.index("lex-tie"))
+        self.assertAlmostEqual(rows[ids.index("both")]["$dist"], 1 / 11)
+        self.assertAlmostEqual(rows[ids.index("lex-tie")]["$dist"], 1 / 11)
 
     def test_pretokenizer_handles_latin_and_japanese(self) -> None:
         self.assertEqual(

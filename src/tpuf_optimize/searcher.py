@@ -156,15 +156,42 @@ class Searcher:
     def search(
         self, requests: Iterable[SearchRequest], top_k: int
     ) -> Iterator[tuple[SearchRequest, list[Row]]]:
-        """Yield each request with its rows, issuing one API call per batch."""
+        """Yield ordered results, keeping every multi-query request <= 16 arms."""
         iterator = iter(requests)
-        while request_batch := list(
-            itertools.islice(iterator, self.batch_size)
-        ):
-            queries = [
-                self.strategy.query(request.text, request.locale, top_k)
-                for request in request_batch
-            ]
-            rows_by_query = self._query_batch(queries)
-            for request, rows in zip(request_batch, rows_by_query):
-                yield request, rows
+        while True:
+            request_batch: list[SearchRequest] = []
+            plans: list[tuple[Query, ...]] = []
+            query_count = 0
+
+            while len(request_batch) < self.batch_size:
+                try:
+                    request = next(iterator)
+                except StopIteration:
+                    break
+                plan = self.strategy.retrieval_queries(
+                    request.text, request.locale, top_k
+                )
+                if not plan or len(plan) > self.MAX_QUERIES_PER_BATCH:
+                    raise ValueError(
+                        "each request must produce between 1 and 16 queries"
+                    )
+                if request_batch and (
+                    query_count + len(plan) > self.MAX_QUERIES_PER_BATCH
+                ):
+                    # Keep this request for the next bounded batch.
+                    iterator = itertools.chain((request,), iterator)
+                    break
+                request_batch.append(request)
+                plans.append(plan)
+                query_count += len(plan)
+
+            if not request_batch:
+                return
+
+            flat_queries = [query for plan in plans for query in plan]
+            flat_rows = self._query_batch(flat_queries)
+            cursor = 0
+            for request, plan in zip(request_batch, plans):
+                rows = flat_rows[cursor:cursor + len(plan)]
+                cursor += len(plan)
+                yield request, self.strategy.fuse(rows, top_k)
