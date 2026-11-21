@@ -9,7 +9,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SECTION = "## ESCI 5,000-query leaderboard"
-HEADER = ("Variant", "Latency p50 / p95 (ms)", "NDCG@10")
+HEADERS = (
+    ("Variant", "p50 (ms)", "NDCG@10 (full)"),
+    ("Variant", "Latency p50 / p95 (ms)", "NDCG@10"),
+)
 
 
 @dataclass(frozen=True)
@@ -38,14 +41,18 @@ def parse_leaderboard(markdown: str) -> tuple[list[Point], int]:
             continue
         cells = [cell.strip() for cell in line.strip("|").split("|")]
         if columns is None:
-            if all(name in cells for name in HEADER):
-                columns = [cells.index(name) for name in HEADER]
+            for header in HEADERS:
+                if all(name in cells for name in header):
+                    columns = [cells.index(name) for name in header]
+                    break
             continue
         if all(set(cell) <= {"-", ":"} for cell in cells):
             continue
         if len(cells) <= max(columns):
             raise ValueError(f"Malformed leaderboard row: {line}")
         name, latency, ndcg = (cells[index] for index in columns)
+        if name.startswith("[") and "](" in name:
+            name = name[1:name.index("](")]
         if any(value.casefold() in {"pending", "", "—"} for value in (latency, ndcg)):
             pending += 1
             continue
@@ -80,13 +87,13 @@ def padded_range(values: list[float], minimum_span: float) -> tuple[float, float
     return low - pad, high + pad
 
 
-def render_svg(points: list[Point], pending: int) -> str:
+def render_svg(points: list[Point], pending: int, percentile: str = "p50") -> str:
     height = max(390, 135 + 25 * len(points))
     svg = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1060 {height}"'
         ' role="img" aria-labelledby="title desc">',
         '<title id="title">ESCI relevance and latency Pareto frontier</title>',
-        '<desc id="desc">Median latency in milliseconds versus NDCG at 10.'
+        f'<desc id="desc">{percentile} latency in milliseconds versus NDCG at 10.'
         ' Lower latency and higher NDCG are better.</desc>',
         '<style>text{font:14px system-ui,sans-serif;fill:#172438}'
         '.small{font-size:12px;fill:#43546b}.heading{font-size:23px;'
@@ -129,7 +136,7 @@ def render_svg(points: list[Point], pending: int) -> str:
     svg.extend([
         f'<path class="axis" fill="none" d="M{left} {top}V{bottom}H{right}"/>',
         f'<text x="{(left + right) / 2}" y="{height - 19}" '
-        'text-anchor="middle">End-to-end p50 latency (ms)</text>',
+        f'text-anchor="middle">End-to-end {percentile} latency (ms)</text>',
         f'<text transform="translate(24 {(top + bottom) / 2}) rotate(-90)" '
         'text-anchor="middle">NDCG@10</text>',
         '<text x="657" y="100">Variants · green = Pareto frontier</text>',

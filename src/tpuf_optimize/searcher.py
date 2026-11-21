@@ -169,6 +169,16 @@ class Searcher:
             for request, rows in zip(request_batch, rows_by_query):
                 yield request, rows
 
+    def _retrieve_measured_batch(
+        self, requests: list[SearchRequest], top_k: int
+    ) -> list[list[Row]]:
+        queries = [
+            self.strategy.query(request.text, request.locale, top_k)
+            for request in requests
+        ]
+        response = self.namespace.multi_query(queries=queries)
+        return [result.rows or [] for result in response.results]
+
     def measure_batch(
         self, requests: list[SearchRequest], top_k: int
     ) -> tuple[list[list[Row]], float, int]:
@@ -181,14 +191,10 @@ class Searcher:
             nonlocal attempts
             attempts += 1
             start = time.perf_counter()
-            queries = [
-                self.strategy.query(request.text, request.locale, top_k)
-                for request in requests
-            ]
-            response = self.namespace.multi_query(queries=queries)
-            if len(response.results) != len(requests):
+            rows = self._retrieve_measured_batch(requests, top_k)
+            if len(rows) != len(requests):
                 raise ValueError("Incomplete response for measured query batch")
-            rows = [(result.rows or [])[:top_k] for result in response.results]
+            rows = [hits[:top_k] for hits in rows]
             return rows, (time.perf_counter() - start) * 1000 / len(requests)
 
         # No serial fallback: it would silently change the measured workload.

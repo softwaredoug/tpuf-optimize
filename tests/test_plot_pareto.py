@@ -33,3 +33,9 @@ class ParetoPlotTests(unittest.TestCase):
         self.assertIn("0 measured; 10 pending", chart)
         self.assertNotIn("<circle", chart)
         ElementTree.fromstring(chart)
+
+    def test_tail_latency_axis_uses_p95(self) -> None:
+        chart = render_svg([Point("Variant", 80, 0.41)], 0, "p95")
+        self.assertIn("End-to-end p95 latency (ms)", chart)
+        self.assertNotIn("End-to-end p50 latency (ms)", chart)
+        ElementTree.fromstring(chart)

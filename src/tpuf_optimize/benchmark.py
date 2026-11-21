@@ -26,9 +26,10 @@ def run_benchmark(
     requests: list[SearchRequest],
     searcher: Searcher,
     top_k: int,
-    target: tuple[str, str],
+    target: tuple[str, ...],
     resume: bool,
     rank: Callable[[SearchRequest, list[Row]], RankedRows],
+    progress: Callable[[int], None] | None = None,
 ) -> None:
     if not requests:
         raise ValueError("Benchmark requires at least one query")
@@ -77,6 +78,8 @@ def run_benchmark(
                         for request, hits in zip(batch, rows, strict=True)
                     ],
                 )
+            if progress is not None:
+                progress(start + len(batch))
         _export_rankings(db, output, requests)
 
 
