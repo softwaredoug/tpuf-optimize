@@ -123,6 +123,25 @@ class TPufStrategyTests(unittest.TestCase):
         self.assertIn("title__word_v4__es__stem_stop_fold", str(es_query["rank_by"]))
         self.assertIn("title__kuromoji__ja", str(jp_query["rank_by"]))
 
+    def test_hybrid_queries_use_embedding_and_normalized_locale(self) -> None:
+        strategy = TPufStrategy(
+            hybrid_weights=(2.0, 1.0),
+            confidence_gate="identifier",
+        )
+        dense_query, lexical_query = strategy.hybrid_queries(
+            "blue shoe", "en-US", top_k=10
+        )
+
+        self.assertEqual(
+            dense_query["rank_by"],
+            ("passage__embed__voyage_4", "ANN", ("Embed", "blue shoe")),
+        )
+        self.assertEqual(dense_query["filters"], ("locale", "Eq", "us"))
+        self.assertEqual(dense_query["top_k"], 100)
+        self.assertEqual(lexical_query["filters"], ("locale", "Eq", "us"))
+        self.assertIn("title", dense_query["include_attributes"])
+        self.assertIn("brand", lexical_query["include_attributes"])
+
     def test_pretokenizer_handles_latin_and_japanese(self) -> None:
         self.assertEqual(
             self.strategy.pretokenize("A-B Café"),

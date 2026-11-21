@@ -80,6 +80,17 @@ class ConfidenceFusionTests(unittest.TestCase):
 
         self.assertEqual(weights, (2.0, 1.0))
 
+    def test_identifier_gate_recognizes_a_direct_attribute_match(self) -> None:
+        dense = _candidates("dense", [0.9, 0.8, 0.7], title="running shoe")
+        lexical = _candidates("lexical", [12, 8, 2], title="blue boots")
+        lexical[0]["color"] = "blue"
+
+        weights = confidence_aware_weights(
+            "blue boots", dense, lexical, gate="identifier"
+        )
+
+        self.assertEqual(weights, (1.0, 2.0))
+
     def test_unusable_score_signals_keep_baseline(self) -> None:
         dense = _candidates("d", [0.9, 0.9, 0.9])
         lexical = _candidates("l", [1.0, 1.0, 1.0])

@@ -158,13 +158,35 @@ class Searcher:
     ) -> Iterator[tuple[SearchRequest, list[Row]]]:
         """Yield each request with its rows, issuing one API call per batch."""
         iterator = iter(requests)
-        while request_batch := list(
-            itertools.islice(iterator, self.batch_size)
-        ):
-            queries = [
-                self.strategy.query(request.text, request.locale, top_k)
-                for request in request_batch
-            ]
+        hybrid = self.strategy.hybrid_weights is not None
+        request_limit = min(self.batch_size, 8 if hybrid else 16)
+        while request_batch := list(itertools.islice(iterator, request_limit)):
+            if hybrid:
+                query_groups = [
+                    self.strategy.hybrid_queries(
+                        request.text, request.locale, top_k
+                    )
+                    for request in request_batch
+                ]
+            else:
+                query_groups = [
+                    (self.strategy.query(request.text, request.locale, top_k),)
+                    for request in request_batch
+                ]
+            queries = [query for group in query_groups for query in group]
             rows_by_query = self._query_batch(queries)
-            for request, rows in zip(request_batch, rows_by_query):
-                yield request, rows
+            results = iter(rows_by_query)
+            for request, group in zip(request_batch, query_groups):
+                rows = list(itertools.islice(results, len(group)))
+                if not hybrid:
+                    yield request, rows[0]
+                    continue
+                weights = self.strategy.weights_for_candidates(
+                    request.text, rows[0], rows[1]
+                )
+                yield request, self.strategy.reciprocal_rank_fusion(
+                    rows,
+                    weights=weights,
+                    rank_constant=self.strategy.rank_constant,
+                    top_k=top_k,
+                )

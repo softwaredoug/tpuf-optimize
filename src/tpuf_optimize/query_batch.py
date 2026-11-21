@@ -10,7 +10,12 @@ from pathlib import Path
 from turbopuffer import Turbopuffer
 
 from tpuf_optimize.searcher import SearchRequest, Searcher
-from tpuf_optimize.strategy import TPufStrategy
+from tpuf_optimize.strategy import (
+    DEFAULT_CONFIDENCE_GATE,
+    DEFAULT_HYBRID_WEIGHTS,
+    DEFAULT_RRF_RANK_CONSTANT,
+    TPufStrategy,
+)
 
 
 def _read_queries(path: Path) -> list[SearchRequest]:
@@ -80,12 +85,26 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--top-k", type=int, default=10)
     parser.add_argument(
+        "--lexical-only",
+        action="store_true",
+        help="Disable Voyage dense retrieval and hybrid rank fusion.",
+    )
+    parser.add_argument(
+        "--confidence-gate",
+        choices=("identifier", "margin", "none"),
+        default=DEFAULT_CONFIDENCE_GATE,
+        help=(
+            "Per-query hybrid weight gate; 'none' uses fixed 2:1 dense:lexical "
+            "RRF."
+        ),
+    )
+    parser.add_argument(
         "--batch-size",
         type=int,
         default=Searcher.MAX_QUERIES_PER_BATCH,
         help=(
-            "Maximum number of queries per multi-query request "
-            f"(capped at {Searcher.MAX_QUERIES_PER_BATCH})."
+            "Maximum input queries per batch; hybrid mode submits two retrieval "
+            "queries per input and is capped at 8 input queries."
         ),
     )
     return parser
@@ -105,7 +124,18 @@ def main(argv: list[str] | None = None) -> int:
         requests = _read_queries(args.queries)
         with Turbopuffer(region=args.region) as client:
             namespace = client.namespace(args.namespace)
-            searcher = Searcher(namespace, TPufStrategy(), args.batch_size)
+            strategy = TPufStrategy(
+                hybrid_weights=(
+                    None if args.lexical_only else DEFAULT_HYBRID_WEIGHTS
+                ),
+                rank_constant=DEFAULT_RRF_RANK_CONSTANT,
+                confidence_gate=(
+                    None
+                    if args.lexical_only or args.confidence_gate == "none"
+                    else args.confidence_gate
+                ),
+            )
+            searcher = Searcher(namespace, strategy, args.batch_size)
             _write_results(args.output, requests, searcher, args.top_k)
     except (OSError, ValueError) as error:
         parser.error(str(error))

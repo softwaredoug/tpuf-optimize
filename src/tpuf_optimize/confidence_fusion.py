@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping, Sequence
+from math import isfinite
 from statistics import median
 from typing import Literal
 
@@ -24,6 +25,14 @@ def _value(candidate: Candidate, *keys: str) -> str:
     return ""
 
 
+def _numeric(candidate: Candidate, *keys: str) -> float | None:
+    for key in keys:
+        value = candidate.get(key)
+        if isinstance(value, (int, float)) and isfinite(value):
+            return float(value)
+    return None
+
+
 def _normalized_tokens(text: str) -> list[str]:
     return [token.casefold() for token in _TOKEN_RE.findall(text)]
 
@@ -32,9 +41,9 @@ def _score_gap(results: Sequence[Candidate]) -> float:
     """Return a scale-free top-versus-tail score separation in [0, 1]."""
     scores: list[float] = []
     for result in results:
-        raw_score = result.get("score")
-        if isinstance(raw_score, (int, float)):
-            scores.append(float(raw_score))
+        score = _numeric(result, "score", "$dist")
+        if score is not None:
+            scores.append(score)
     if len(scores) < 3:
         return 0.0
 
@@ -127,11 +136,14 @@ def confidence_aware_weights(
     ``margin`` moves from the fixed 2:1 baseline only when one list has a
     clearly larger top-to-tail score gap and the lists have little overlap.
     ``identifier`` uses a lexical-heavy 1:2 weight only when the lexical top
-    result resolves an exact identifier absent from the dense top three.
+    resolves an exact identifier or direct attribute match absent from the
+    dense top three.
     """
     if gate not in ("margin", "identifier"):
         raise ValueError(f"unknown confidence gate: {gate}")
-    if len(baseline) != 2 or any(weight < 0 for weight in baseline):
+    if len(baseline) != 2 or any(
+        not isfinite(weight) or weight < 0 for weight in baseline
+    ):
         raise ValueError("baseline must contain two non-negative weights")
     if sum(baseline) <= 0:
         raise ValueError("baseline must have a positive weight")
