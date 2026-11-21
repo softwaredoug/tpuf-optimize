@@ -11,15 +11,18 @@ from pathlib import Path
 
 from tpuf_optimize.learned_rank import (
     FEATURE_NAMES,
+    LinearRanker,
     candidate_oracle_ndcg,
     evaluate,
     feature_vectors,
     fit_ranker,
     main,
     model_ranking,
+    ndcg,
     parse_query_record,
     read_candidates,
     read_grades,
+    read_targets,
     rrf_ranking,
     split_query_groups,
 )
@@ -146,6 +149,41 @@ class LearnedRankTests(unittest.TestCase):
                 epochs=5,
             )
 
+    def test_sampled_zero_policy_is_opt_in_and_deterministic(self) -> None:
+        group = _groups(1)[0]
+        labels = {"q0": {"good-0": 3.0, "bad-0": 0.0}}
+        first = fit_ranker(
+            [group],
+            labels,
+            epochs=20,
+            zero_sample_per_query=1,
+            zero_pair_weight=0.1,
+            seed=17,
+        )
+        second = fit_ranker(
+            [group],
+            labels,
+            epochs=20,
+            zero_sample_per_query=1,
+            zero_pair_weight=0.1,
+            seed=17,
+        )
+        self.assertEqual(first.weights, second.weights)
+
+    def test_target_grades_are_used_only_for_global_ndcg_ideal(self) -> None:
+        group = parse_query_record(_record(3))
+        labels = {"good-3": 3.0, "bad-3": 1.0}
+        model = fit_ranker([group], {"q3": labels}, epochs=10)
+        ranking = model_ranking(group, model)
+        candidate_ideal = ndcg(ranking, labels)
+        full_target_ideal = ndcg(
+            ranking,
+            labels,
+            ideal_grades={"outside-candidates": 4.0, **labels},
+        )
+        self.assertEqual(candidate_ideal, 1.0)
+        self.assertLess(full_target_ideal, candidate_ideal)
+
     def test_pairwise_fit_and_eval_compare_same_candidates_to_rrf(self) -> None:
         groups = _groups()
         grades = _grades()
@@ -154,6 +192,7 @@ class LearnedRankTests(unittest.TestCase):
         validation_ids = {group.query_id for group in validation}
         self.assertFalse(train_ids.intersection(validation_ids))
         model = fit_ranker(training, grades, epochs=600, learning_rate=0.15)
+        self.assertEqual(LinearRanker.from_json(model.to_json()), model)
         report = evaluate(validation, grades, model)
         self.assertEqual(report["evaluated_queries"], len(validation))
         self.assertGreater(
@@ -195,6 +234,18 @@ class LearnedRankTests(unittest.TestCase):
             )
             self.assertEqual(len(read_candidates(candidate_file)), 8)
             self.assertEqual(read_grades(grade_file)["q0"]["bad-0"], 0.0)
+            target_file = root / "targets.jsonl"
+            target_file.write_text(
+                json.dumps(
+                    {
+                        "query_id": "q0",
+                        "targets": [{"doc_id": "outside-pool", "grade": 3}],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(read_targets(target_file)["q0"]["outside-pool"], 3.0)
             stdout = io.StringIO()
             with contextlib.redirect_stdout(stdout):
                 status = main(

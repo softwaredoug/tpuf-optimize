@@ -83,6 +83,14 @@ feature uses this same comparator.
 It also reports a candidate-set oracle on training queries only as a diagnostic;
 the oracle is not used to produce rankings. Unjudged/zero-grade documents do
 not contribute gain in the NDCG calculation.
+Optionally pass `--targets` with Referee's top judged target documents; those
+labels are used only for the NDCG ideal denominator and never enter training,
+features, or ranking inference.
+The optional `--zero-sample-per-query` and `--zero-pair-weight` flags enable a
+deterministic, weakly weighted grade-zero contrast experiment; the default
+continues to omit those ambiguous candidates from pair construction.
+The optional model JSON contains only feature names and learned weights;
+`LinearRanker.from_json` loads that parameter-only artifact for inference.
 
 ## Search architecture
 

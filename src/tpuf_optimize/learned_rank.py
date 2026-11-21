@@ -72,6 +72,20 @@ class LinearRanker:
     def to_json(self) -> dict[str, Any]:
         return {"feature_names": list(self.feature_names), "weights": list(self.weights)}
 
+    @classmethod
+    def from_json(cls, payload: Mapping[str, Any]) -> LinearRanker:
+        """Load a weight-only artifact, rejecting schema/feature mismatches."""
+        names = payload.get("feature_names")
+        raw_weights = payload.get("weights")
+        if names != list(FEATURE_NAMES) or not isinstance(raw_weights, list):
+            raise ValueError("ranker artifact has an incompatible feature schema")
+        weights = tuple(_number(value) for value in raw_weights)
+        if len(weights) != len(FEATURE_NAMES) or any(
+            value is None for value in weights
+        ):
+            raise ValueError("ranker artifact has invalid weights")
+        return cls(tuple(value for value in weights if value is not None))
+
 
 def _number(value: object) -> float | None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
@@ -187,6 +201,41 @@ def read_grades(path: Path) -> dict[str, dict[str, float]]:
     return grades
 
 
+def read_targets(path: Path) -> dict[str, dict[str, float]]:
+    """Read Referee's top judged documents for NDCG ideal-DCG only.
+
+    Target judgments must not be supplied to feature extraction or model fitting.
+    """
+    targets: dict[str, dict[str, float]] = {}
+    with path.open(encoding="utf-8") as stream:
+        for line_number, line in enumerate(stream, 1):
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError as error:
+                raise ValueError(f"{path}:{line_number}: invalid JSON") from error
+            if not isinstance(record, Mapping) or not isinstance(
+                record.get("query_id"), str
+            ):
+                raise ValueError(f"{path}:{line_number}: expected query_id")
+            query_id = str(record["query_id"])
+            if query_id in targets:
+                raise ValueError(f"{path}:{line_number}: duplicate query_id")
+            raw_targets = record.get("targets", [])
+            if not isinstance(raw_targets, list):
+                raise ValueError(f"{path}:{line_number}: targets must be a list")
+            parsed: dict[str, float] = {}
+            for item in raw_targets:
+                if not isinstance(item, Mapping):
+                    continue
+                grade = _number(item.get("grade"))
+                if item.get("doc_id") is not None and grade is not None and grade >= 0:
+                    parsed[str(item["doc_id"])] = grade
+            targets[query_id] = parsed
+    return targets
+
+
 def rrf_score(candidate: Candidate, dense_weight: float = 2.0) -> float:
     """Match the repository comparator: 2:1 weights and one-based RRF k=10."""
     dense = (
@@ -286,11 +335,24 @@ def _gain(grade: float) -> float:
 
 
 def _pair_examples(
-    groups: Iterable[QueryCandidates], grades: Mapping[str, Mapping[str, float]]
+    groups: Iterable[QueryCandidates],
+    grades: Mapping[str, Mapping[str, float]],
+    *,
+    zero_sample_per_query: int = 0,
+    zero_pair_weight: float = 0.1,
+    seed: int = 17,
 ) -> list[tuple[tuple[float, ...], float]]:
-    """Create query-local preference differences, ignoring ambiguous grade 0."""
+    """Create query-local preference pairs; optionally sample weak zero negatives.
+
+    By default grade zero remains ambiguous and is ignored. The opt-in sample
+    policy is an experiment, not a claim that unjudged documents are irrelevant.
+    Sampling randomness is seeded from the query-group's stable input position;
+    identifiers never enter the feature vectors or selection seed.
+    """
+    if zero_sample_per_query < 0 or zero_pair_weight < 0:
+        raise ValueError("zero sampling parameters must be nonnegative")
     examples: list[tuple[tuple[float, ...], float]] = []
-    for group in groups:
+    for group_index, group in enumerate(groups):
         labels = grades.get(group.query_id, {})
         vectors = feature_vectors(group)
         observed = [
@@ -318,6 +380,30 @@ def _pair_examples(
                         delta_gain,
                     )
                 )
+        if zero_sample_per_query:
+            zero_ids = [
+                candidate.doc_id
+                for candidate in group.candidates
+                if labels.get(candidate.doc_id) == 0
+            ]
+            if zero_ids and observed:
+                query_seed = seed + group_index
+                sampled_ids = random.Random(query_seed).sample(
+                    zero_ids, min(zero_sample_per_query, len(zero_ids))
+                )
+                for positive_id, positive_grade in observed:
+                    for zero_id in sampled_ids:
+                        examples.append(
+                            (
+                                tuple(
+                                    a - b
+                                    for a, b in zip(
+                                        vectors[positive_id], vectors[zero_id]
+                                    )
+                                ),
+                                zero_pair_weight * _gain(positive_grade),
+                            )
+                        )
     return examples
 
 
@@ -328,11 +414,20 @@ def fit_ranker(
     epochs: int = 500,
     learning_rate: float = 0.1,
     l2: float = 0.01,
+    zero_sample_per_query: int = 0,
+    zero_pair_weight: float = 0.1,
+    seed: int = 17,
 ) -> LinearRanker:
     """Fit a deterministic full-batch pairwise logistic linear ranker."""
     if epochs < 1 or learning_rate <= 0 or l2 < 0:
         raise ValueError("epochs and learning_rate must be positive; l2 nonnegative")
-    examples = _pair_examples(groups, grades)
+    examples = _pair_examples(
+        groups,
+        grades,
+        zero_sample_per_query=zero_sample_per_query,
+        zero_pair_weight=zero_pair_weight,
+        seed=seed,
+    )
     if not examples:
         raise ValueError("training data contains no unequal positive-grade pairs")
     weights = [0.0] * len(FEATURE_NAMES)
@@ -370,16 +465,22 @@ def ndcg(
     ranking: Sequence[tuple[Candidate, float]],
     labels: Mapping[str, float],
     cutoff: int = 10,
+    *,
+    ideal_grades: Mapping[str, float] | None = None,
 ) -> float | None:
-    """NDCG over available judgments; unknown documents have zero observed gain.
+    """NDCG using candidate labels for DCG and optional complete targets for IDCG.
 
-    Grade-zero judgments are ambiguous and excluded from both gains and the
-    ideal list. Unjudged/zero-grade candidates still occupy their retrieval rank.
+    Grade-zero/unknown documents add no gain. Referee's top judged targets, when
+    provided, are used only for ideal DCG—not for features, fitting or rankings.
     """
     if cutoff < 1:
         raise ValueError("cutoff must be positive")
     judged = {doc_id: grade for doc_id, grade in labels.items() if grade > 0}
-    ideal = sorted((_gain(grade) for grade in judged.values()), reverse=True)[:cutoff]
+    ideal_labels = labels if ideal_grades is None else ideal_grades
+    ideal = sorted(
+        (_gain(grade) for grade in ideal_labels.values() if grade > 0),
+        reverse=True,
+    )[:cutoff]
     ideal_dcg = sum(gain / math.log2(rank + 2) for rank, gain in enumerate(ideal))
     if ideal_dcg <= 0:
         return None
@@ -396,6 +497,7 @@ def evaluate(
     grades: Mapping[str, Mapping[str, float]],
     model: LinearRanker,
     cutoff: int = 10,
+    ideal_grades: Mapping[str, Mapping[str, float]] | None = None,
 ) -> dict[str, float | int | None]:
     """Compare model and 2:1 RRF on the exact same query candidate sets."""
     baseline_values: list[float] = []
@@ -403,8 +505,15 @@ def evaluate(
     eligible = 0
     for group in groups:
         labels = grades.get(group.query_id, {})
-        baseline = ndcg(rrf_ranking(group), labels, cutoff)
-        reranked = ndcg(model_ranking(group, model), labels, cutoff)
+        ideal = (
+            ideal_grades.get(group.query_id, labels)
+            if ideal_grades is not None
+            else labels
+        )
+        baseline = ndcg(rrf_ranking(group), labels, cutoff, ideal_grades=ideal)
+        reranked = ndcg(
+            model_ranking(group, model), labels, cutoff, ideal_grades=ideal
+        )
         if baseline is None or reranked is None:
             continue
         eligible += 1
@@ -426,11 +535,17 @@ def candidate_oracle_ndcg(
     groups: Sequence[QueryCandidates],
     grades: Mapping[str, Mapping[str, float]],
     cutoff: int = 10,
+    ideal_grades: Mapping[str, Mapping[str, float]] | None = None,
 ) -> float | None:
     """Training-only candidate-set oracle for diagnostics; never a system ranker."""
     values: list[float] = []
     for group in groups:
         labels = grades.get(group.query_id, {})
+        ideal = (
+            ideal_grades.get(group.query_id, labels)
+            if ideal_grades is not None
+            else labels
+        )
         oracle = sorted(
             group.candidates,
             key=lambda candidate: (
@@ -438,7 +553,12 @@ def candidate_oracle_ndcg(
                 candidate.doc_id,
             ),
         )
-        value = ndcg([(candidate, 0.0) for candidate in oracle], labels, cutoff)
+        value = ndcg(
+            [(candidate, 0.0) for candidate in oracle],
+            labels,
+            cutoff,
+            ideal_grades=ideal,
+        )
         if value is not None:
             values.append(value)
     return sum(values) / len(values) if values else None
@@ -461,6 +581,11 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--candidates", type=Path, required=True)
     parser.add_argument("--grades", type=Path, required=True)
+    parser.add_argument(
+        "--targets",
+        type=Path,
+        help="Optional Referee judged targets used only for NDCG ideal DCG.",
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--model-output", type=Path)
     parser.add_argument("--validation-fraction", type=float, default=0.25)
@@ -468,6 +593,18 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--epochs", type=int, default=500)
     parser.add_argument("--learning-rate", type=float, default=0.1)
     parser.add_argument("--l2", type=float, default=0.01)
+    parser.add_argument(
+        "--zero-sample-per-query",
+        type=int,
+        default=0,
+        help="Experimental sampled grade-zero pairs per training query (default: off).",
+    )
+    parser.add_argument(
+        "--zero-pair-weight",
+        type=float,
+        default=0.1,
+        help="Relative weight for opt-in grade-zero pair constraints.",
+    )
     parser.add_argument("--cutoff", type=int, default=10)
     return parser
 
@@ -478,6 +615,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         groups = read_candidates(args.candidates)
         grades = read_grades(args.grades)
+        targets = read_targets(args.targets) if args.targets is not None else None
         train_groups, validation_groups = split_query_groups(
             groups, args.validation_fraction, args.seed
         )
@@ -487,14 +625,26 @@ def main(argv: list[str] | None = None) -> int:
             epochs=args.epochs,
             learning_rate=args.learning_rate,
             l2=args.l2,
+            zero_sample_per_query=args.zero_sample_per_query,
+            zero_pair_weight=args.zero_pair_weight,
+            seed=args.seed,
         )
         report = {
             "train_queries": len(train_groups),
             "validation_queries": len(validation_groups),
             "train_candidate_oracle_ndcg": candidate_oracle_ndcg(
-                train_groups, grades, args.cutoff
+                train_groups,
+                grades,
+                args.cutoff,
+                ideal_grades=targets,
             ),
-            "validation": evaluate(validation_groups, grades, model, args.cutoff),
+            "validation": evaluate(
+                validation_groups,
+                grades,
+                model,
+                args.cutoff,
+                ideal_grades=targets,
+            ),
         }
         _write_csv(args.output, validation_groups, model)
         if args.model_output is not None:
