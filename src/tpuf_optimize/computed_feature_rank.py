@@ -13,6 +13,7 @@ import json
 import math
 import random
 import re
+import unicodedata
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -43,7 +44,57 @@ COMPUTED_FEATURE_NAMES = (
     "title_full_coverage_available",
 )
 ENHANCED_FEATURE_NAMES = FEATURE_NAMES + COMPUTED_FEATURE_NAMES
+TYPED_FEATURE_NAMES = (
+    "typed_product_match",
+    "typed_support",
+    "typed_contradiction",
+    "typed_unknown",
+)
+TYPED_ENHANCED_FEATURE_NAMES = ENHANCED_FEATURE_NAMES + TYPED_FEATURE_NAMES
+TYPED_NO_UNKNOWN_FEATURE_NAMES = TYPED_FEATURE_NAMES[:-1]
+TYPED_ENHANCED_NO_UNKNOWN_FEATURE_NAMES = (
+    ENHANCED_FEATURE_NAMES + TYPED_NO_UNKNOWN_FEATURE_NAMES
+)
 _TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
+_MODEL_RE = re.compile(
+    r"(?<!\w)(?=[a-z0-9-]*[a-z])(?=[a-z0-9-]*\d)"
+    r"[a-z0-9]+(?:-[a-z0-9]+)*(?!\w)",
+    re.IGNORECASE,
+)
+_NUMBER_RE = re.compile(r"(?<![\w.])\d+(?:[.,]\d+)?(?!\w)")
+_UNIT_RE = re.compile(
+    r"(?<!\w)(ounces?|oz|pounds?|lbs?|kilograms?|kg|grams?|g|milligrams?|mg|"
+    r"milliliters?|millilitres?|ml|liters?|litres?|l|inches?|in|"
+    r"centimeters?|centimetres?|cm|millimeters?|millimetres?|mm|"
+    r"feet|ft|watts?|w|volts?|v|packs?|count|ct|pieces?|pcs?)(?!\w)",
+    re.IGNORECASE,
+)
+_UNIT_ALIASES = {
+    "ounce": "oz", "ounces": "oz", "pound": "lb", "pounds": "lb", "lbs": "lb",
+    "kilogram": "kg", "kilograms": "kg", "gram": "g", "grams": "g",
+    "milligram": "mg", "milligrams": "mg", "milliliter": "ml",
+    "milliliters": "ml", "millilitre": "ml", "millilitres": "ml",
+    "liter": "l", "liters": "l", "litre": "l", "litres": "l",
+    "inch": "in", "inches": "in", "centimeter": "cm", "centimeters": "cm",
+    "centimetre": "cm", "centimetres": "cm", "millimeter": "mm",
+    "millimeters": "mm", "millimetre": "mm", "millimetres": "mm",
+    "watt": "w", "watts": "w", "volt": "v", "volts": "v",
+    "packs": "pack", "count": "ct", "pieces": "pc", "pcs": "pc",
+}
+_STOPWORDS = frozenset(
+    "a an and for in of the to with by from on at set pack size inc llc ltd "
+    "corp company incorporated".split()
+)
+_COLOR_ALIASES = {
+    "grey": "gray", "navy": "blue", "teal": "blue", "aqua": "blue",
+    "burgundy": "red", "maroon": "red", "ivory": "white", "cream": "white",
+    "tan": "brown", "beige": "brown", "multicolored": "multi",
+    "multicolor": "multi", "multiple": "multi",
+}
+_COLOR_TERMS = frozenset(
+    "black white gray silver red orange yellow green blue purple pink brown "
+    "gold clear transparent multi".split()
+)
 
 
 @dataclass(frozen=True)
@@ -60,6 +111,8 @@ class Candidate:
     passage_bm25: float | None = None
     brand_bm25: float | None = None
     title_full_coverage: bool | None = None
+    brand: str = ""
+    color: str = ""
 
 
 @dataclass(frozen=True)
@@ -92,9 +145,14 @@ class LinearRanker:
         """Load a weight-only artifact, rejecting schema/feature mismatches."""
         names = payload.get("feature_names")
         raw_weights = payload.get("weights")
-        if names not in (list(FEATURE_NAMES), list(ENHANCED_FEATURE_NAMES)) or not isinstance(
-            raw_weights, list
-        ):
+        valid_names = (
+            list(FEATURE_NAMES),
+            list(ENHANCED_FEATURE_NAMES),
+            list(TYPED_ENHANCED_FEATURE_NAMES),
+            list(TYPED_ENHANCED_NO_UNKNOWN_FEATURE_NAMES),
+            list(FEATURE_NAMES + TYPED_NO_UNKNOWN_FEATURE_NAMES),
+        )
+        if names not in valid_names or not isinstance(raw_weights, list):
             raise ValueError("ranker artifact has an incompatible feature schema")
         expected_width = len(names)
         weights = tuple(_number(value) for value in raw_weights)
@@ -160,6 +218,10 @@ def parse_query_record(record: Mapping[str, Any]) -> QueryCandidates:
                     "title_full_coverage"
                 ) is None:
                     entry["title_full_coverage"] = coverage
+            for name in ("brand", "color"):
+                value = item.get(name)
+                if isinstance(value, str) and value and not entry.get(name):
+                    entry[name] = value
 
     candidates = tuple(
         Candidate(
@@ -173,6 +235,8 @@ def parse_query_record(record: Mapping[str, Any]) -> QueryCandidates:
             passage_bm25=item.get("passage_bm25"),
             brand_bm25=item.get("brand_bm25"),
             title_full_coverage=item.get("title_full_coverage"),
+            brand=str(item.get("brand", "")),
+            color=str(item.get("color", "")),
         )
         for doc_id, item in merged.items()
     )
@@ -316,8 +380,112 @@ def _z_scores(values: Sequence[float | None]) -> list[float]:
     return [((value - mean) / scale if value is not None else 0.0) for value in values]
 
 
+def _normalized_tokens(text: object) -> list[str]:
+    normalized = unicodedata.normalize("NFKC", str(text or "")).casefold()
+    return _TOKEN_RE.findall(normalized)
+
+
+def _normalized_numbers(text: str) -> set[str]:
+    result: set[str] = set()
+    for match in _NUMBER_RE.finditer(text.replace(",", ".")):
+        try:
+            result.add(f"{float(match.group()):g}")
+        except ValueError:
+            result.add(match.group())
+    return result
+
+
+def _normalized_units(text: str) -> set[str]:
+    return {
+        _UNIT_ALIASES.get(match.group().casefold(), match.group().casefold())
+        for match in _UNIT_RE.finditer(text)
+    }
+
+
+def _typed_product_features(group: QueryCandidates) -> dict[str, tuple[float, ...]]:
+    """Compute compact three-state product evidence from existing cache fields.
+
+    Slot inference follows the typed-evidence experiment: brands must be
+    suggested by the query and retrieved explicit brand metadata; colors are
+    normalized aliases; identifiers, numbers and units are read from title.
+    Missing evidence is neutral (unknown), never a contradiction.
+    """
+    query = unicodedata.normalize("NFKC", group.query_text).casefold()
+    query_tokens = set(_TOKEN_RE.findall(query))
+    candidates = group.candidates
+    brand_query_values: set[str] = set()
+    for candidate in candidates:
+        brand_tokens = {
+            token for token in _normalized_tokens(candidate.brand)
+            if token not in _STOPWORDS
+        }
+        overlap = brand_tokens & query_tokens
+        if brand_tokens and (
+            brand_tokens <= query_tokens
+            or len(overlap) >= 2
+            or any(len(token) >= 6 for token in overlap)
+        ):
+            brand_query_values.update(overlap)
+    color_query_values = {
+        _COLOR_ALIASES.get(token, token)
+        for token in query_tokens
+        if token in _COLOR_TERMS or token in _COLOR_ALIASES
+    }
+    model_query_values = {match.group().casefold() for match in _MODEL_RE.finditer(query)}
+    number_query_values = _normalized_numbers(query)
+    unit_query_values = _normalized_units(query)
+
+    result: dict[str, tuple[float, ...]] = {}
+    for candidate in candidates:
+        title = unicodedata.normalize("NFKC", candidate.title).casefold()
+        title_tokens = set(_TOKEN_RE.findall(title))
+        brand_values = {
+            token for token in _normalized_tokens(candidate.brand)
+            if token not in _STOPWORDS
+        }
+        color_values = {
+            _COLOR_ALIASES.get(token, token)
+            for token in (
+                set(_normalized_tokens(candidate.color)) | title_tokens
+            )
+            if token in _COLOR_TERMS or token in _COLOR_ALIASES
+        }
+        document_slots = (
+            (brand_query_values, brand_values),
+            (color_query_values, color_values),
+            (
+                model_query_values,
+                {match.group().casefold() for match in _MODEL_RE.finditer(title)},
+            ),
+            (number_query_values, _normalized_numbers(title)),
+            (unit_query_values, _normalized_units(title)),
+        )
+        states: list[int] = []
+        identifier_states: list[int] = []
+        for slot_index, (requested, available) in enumerate(document_slots):
+            if not requested:
+                continue
+            state = 1 if requested & available else (-1 if available else 0)
+            states.append(state)
+            if slot_index >= 2:
+                identifier_states.append(state)
+        denominator = max(len(states), 1)
+        result[candidate.doc_id] = (
+            sum(state == 1 for state in identifier_states)
+            / max(len(identifier_states), 1),
+            sum(state == 1 for state in states) / denominator if states else 0.0,
+            sum(state == -1 for state in states) / denominator if states else 0.0,
+            sum(state == 0 for state in states) / denominator if states else 0.0,
+        )
+    return result
+
+
 def feature_vectors(
-    group: QueryCandidates, *, include_computed: bool = False
+    group: QueryCandidates,
+    *,
+    include_computed: bool = False,
+    include_typed: bool = False,
+    include_typed_unknown: bool = True,
 ) -> dict[str, tuple[float, ...]]:
     """Build per-query runtime features; no identifier or query identity enters."""
     candidates = group.candidates
@@ -327,6 +495,7 @@ def feature_vectors(
         _z_scores([getattr(candidate, field) for candidate in candidates])
         for field in ("title_bm25", "passage_bm25", "brand_bm25")
     ]
+    typed_values = _typed_product_features(group) if include_typed else {}
     query_tokens = set(_TOKEN_RE.findall(group.query_text.casefold()))
     normalized_query = " ".join(_TOKEN_RE.findall(group.query_text.casefold()))
     denominator = max(len(query_tokens), 1)
@@ -366,9 +535,13 @@ def feature_vectors(
                 float(candidate.title_full_coverage is True),
                 float(candidate.title_full_coverage is not None),
             )
-            vectors[candidate.doc_id] = base + enriched
-        else:
-            vectors[candidate.doc_id] = base
+            base = base + enriched
+        if include_typed:
+            typed = typed_values[candidate.doc_id]
+            base = base + (
+                typed if include_typed_unknown else typed[:-1]
+            )
+        vectors[candidate.doc_id] = base
     return vectors
 
 
@@ -403,6 +576,8 @@ def _pair_examples(
     zero_pair_weight: float = 0.1,
     seed: int = 17,
     include_computed: bool = False,
+    include_typed: bool = False,
+    include_typed_unknown: bool = True,
 ) -> list[tuple[tuple[float, ...], float]]:
     """Create query-local preference pairs; optionally sample weak zero negatives.
 
@@ -416,7 +591,12 @@ def _pair_examples(
     examples: list[tuple[tuple[float, ...], float]] = []
     for group_index, group in enumerate(groups):
         labels = grades.get(group.query_id, {})
-        vectors = feature_vectors(group, include_computed=include_computed)
+        vectors = feature_vectors(
+            group,
+            include_computed=include_computed,
+            include_typed=include_typed,
+            include_typed_unknown=include_typed_unknown,
+        )
         observed = [
             (candidate.doc_id, labels[candidate.doc_id])
             for candidate in group.candidates
@@ -480,6 +660,8 @@ def fit_ranker(
     zero_pair_weight: float = 0.1,
     seed: int = 17,
     include_computed: bool = False,
+    include_typed: bool = False,
+    include_typed_unknown: bool = True,
 ) -> LinearRanker:
     """Fit a deterministic full-batch pairwise logistic linear ranker."""
     if epochs < 1 or learning_rate <= 0 or l2 < 0:
@@ -491,10 +673,23 @@ def fit_ranker(
         zero_pair_weight=zero_pair_weight,
         seed=seed,
         include_computed=include_computed,
+        include_typed=include_typed,
+        include_typed_unknown=include_typed_unknown,
     )
     if not examples:
         raise ValueError("training data contains no unequal positive-grade pairs")
-    feature_names = ENHANCED_FEATURE_NAMES if include_computed else FEATURE_NAMES
+    feature_names = (
+        (ENHANCED_FEATURE_NAMES if include_computed else FEATURE_NAMES)
+        + (
+            (
+                TYPED_FEATURE_NAMES
+                if include_typed_unknown
+                else TYPED_NO_UNKNOWN_FEATURE_NAMES
+            )
+            if include_typed
+            else ()
+        )
+    )
     weights = [0.0] * len(feature_names)
     for _ in range(epochs):
         gradient = [l2 * weight for weight in weights]
@@ -516,10 +711,40 @@ def model_ranking(
     group: QueryCandidates, model: LinearRanker
 ) -> list[tuple[Candidate, float]]:
     """Apply a trained ranker, with deterministic identifier-only tie breaking."""
-    include_computed = model.feature_names == ENHANCED_FEATURE_NAMES
-    if model.feature_names not in (FEATURE_NAMES, ENHANCED_FEATURE_NAMES):
+    valid_schemas = (
+        FEATURE_NAMES,
+        ENHANCED_FEATURE_NAMES,
+        FEATURE_NAMES + TYPED_FEATURE_NAMES,
+        FEATURE_NAMES + TYPED_NO_UNKNOWN_FEATURE_NAMES,
+        TYPED_ENHANCED_FEATURE_NAMES,
+        TYPED_ENHANCED_NO_UNKNOWN_FEATURE_NAMES,
+    )
+    if model.feature_names not in valid_schemas:
         raise ValueError("model has an incompatible feature schema")
-    features = feature_vectors(group, include_computed=include_computed)
+    include_computed = model.feature_names in (
+        ENHANCED_FEATURE_NAMES,
+        TYPED_ENHANCED_FEATURE_NAMES,
+        TYPED_ENHANCED_NO_UNKNOWN_FEATURE_NAMES,
+    )
+    include_typed = model.feature_names in (
+        FEATURE_NAMES + TYPED_FEATURE_NAMES,
+        FEATURE_NAMES + TYPED_NO_UNKNOWN_FEATURE_NAMES,
+        TYPED_ENHANCED_FEATURE_NAMES,
+        TYPED_ENHANCED_NO_UNKNOWN_FEATURE_NAMES,
+    )
+    include_typed_unknown = (
+        model.feature_names
+        not in (
+            FEATURE_NAMES + TYPED_NO_UNKNOWN_FEATURE_NAMES,
+            TYPED_ENHANCED_NO_UNKNOWN_FEATURE_NAMES,
+        )
+    )
+    features = feature_vectors(
+        group,
+        include_computed=include_computed,
+        include_typed=include_typed,
+        include_typed_unknown=include_typed_unknown,
+    )
     return sorted(
         (
             (candidate, model.score(features[candidate.doc_id]))

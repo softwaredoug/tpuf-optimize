@@ -11,8 +11,11 @@ from tpuf_optimize.computed_feature_rank import (
     ENHANCED_FEATURE_NAMES,
     FEATURE_NAMES,
     LinearRanker,
+    TYPED_ENHANCED_FEATURE_NAMES,
+    TYPED_ENHANCED_NO_UNKNOWN_FEATURE_NAMES,
     compare_ablations,
     feature_vectors,
+    model_ranking,
     parse_query_record,
 )
 
@@ -142,6 +145,110 @@ class ComputedFeatureRankTests(unittest.TestCase):
         model = LinearRanker.from_json(payload)
         self.assertEqual(model.feature_names, ENHANCED_FEATURE_NAMES)
         self.assertEqual(len(model.weights), len(ENHANCED_FEATURE_NAMES))
+
+    def test_typed_computed_nominee_artifact_is_weights_only(self) -> None:
+        path = (
+            Path(__file__).resolve().parents[1]
+            / "models"
+            / "esci_pairwise_ranker_typed_computed_no_unknown_training.json"
+        )
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(set(payload), {"feature_names", "weights"})
+        model = LinearRanker.from_json(payload)
+        self.assertIn("typed_product_match", model.feature_names)
+        self.assertIn("typed_contradiction", model.feature_names)
+        self.assertNotIn("typed_unknown", model.feature_names)
+        self.assertEqual(len(model.weights), len(model.feature_names))
+
+    def test_typed_product_evidence_separates_support_conflict_and_unknown(self) -> None:
+        record = {
+            "query_id": "typed",
+            "query_text": "Nike red running shoe size 10",
+            "locale": "en-US",
+            "dense": [
+                {
+                    "doc_id": "supported",
+                    "score": 1.0,
+                    "title": "Nike red running shoe size 10",
+                    "brand": "Nike",
+                    "color": "Red",
+                },
+                {
+                    "doc_id": "contradiction",
+                    "score": 0.9,
+                    "title": "Adidas blue running shoe size 8",
+                    "brand": "Adidas",
+                    "color": "Blue",
+                },
+                {
+                    "doc_id": "unknown",
+                    "score": 0.8,
+                    "title": "Running shoe",
+                    "brand": "",
+                    "color": "",
+                },
+            ],
+            "lexical": [],
+        }
+        group = parse_query_record(record)
+        vectors = feature_vectors(group, include_computed=True, include_typed=True)
+        typed_indices = [
+            TYPED_ENHANCED_FEATURE_NAMES.index(name)
+            for name in (
+                "typed_product_match",
+                "typed_support",
+                "typed_contradiction",
+                "typed_unknown",
+            )
+        ]
+        support = [vectors["supported"][index] for index in typed_indices]
+        conflict = [vectors["contradiction"][index] for index in typed_indices]
+        unknown = [vectors["unknown"][index] for index in typed_indices]
+        self.assertEqual(support, [1.0, 1.0, 0.0, 0.0])
+        self.assertGreater(conflict[2], 0.0)
+        self.assertEqual(conflict[3], 0.0)
+        self.assertEqual(unknown[2], 0.0)
+        self.assertGreater(unknown[3], 0.0)
+        self.assertEqual(
+            tuple(
+                candidate.doc_id
+                for candidate in group.candidates
+            ),
+            ("supported", "contradiction", "unknown"),
+        )
+        supported = group.candidates[0]
+        self.assertEqual((supported.dense_rank, supported.dense_score), (1, 1.0))
+        self.assertEqual((supported.lexical_rank, supported.lexical_score), (None, None))
+        typed_model = LinearRanker(
+            tuple(0.1 for _ in TYPED_ENHANCED_FEATURE_NAMES),
+            TYPED_ENHANCED_FEATURE_NAMES,
+        )
+        ranked_ids = {
+            candidate.doc_id
+            for candidate, _score in model_ranking(group, typed_model)
+        }
+        self.assertEqual(ranked_ids, {candidate.doc_id for candidate in group.candidates})
+        no_unknown_vectors = feature_vectors(
+            group,
+            include_computed=True,
+            include_typed=True,
+            include_typed_unknown=False,
+        )
+        no_unknown_model = LinearRanker(
+            tuple(0.1 for _ in TYPED_ENHANCED_NO_UNKNOWN_FEATURE_NAMES),
+            TYPED_ENHANCED_NO_UNKNOWN_FEATURE_NAMES,
+        )
+        self.assertEqual(
+            len(no_unknown_vectors["supported"]),
+            len(TYPED_ENHANCED_NO_UNKNOWN_FEATURE_NAMES),
+        )
+        self.assertEqual(
+            {
+                candidate.doc_id
+                for candidate, _score in model_ranking(group, no_unknown_model)
+            },
+            ranked_ids,
+        )
 
 
 if __name__ == "__main__":
