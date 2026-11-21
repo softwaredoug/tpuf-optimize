@@ -1,6 +1,7 @@
 ---
 description: Optimizes relevance of Turbopuffer queries
 mode: subagent
+model: openai/gpt-6-luna
 ---
 You're a skilled, Turbopuffer relevance expert. Review the docs
 to learn what's available to you in Turbopuffer for relevance.
@@ -25,6 +26,17 @@ Your first action must be session_move to that directory. You must not
 inspect or modify repository files before the move    
 completes. Report your branch and commit when finished.                                    
 
+### Log every trial in commits
+
+Use the commit history to track your changes, including the feedback
+you get from the orchestrator on holdout deltas. Include
+
+- short description of variant
+- long description
+
+Include the training + holdout NDCG changes. Again, do not try to compute
+holdout NDCG delta yourself, but get it from the orchestrator when it
+validates your work.
 
 ## Use referee for evals in your assigned split
 
@@ -38,6 +50,12 @@ lets you access the queries you're allowed to access to optimize.
 
 Explore the docs for referee here: 
 http://localhost:8080/docs
+
+* Use create-task to access the queries you have to work with
+* Use the debug-queries to deep dive into why a query is not performing well.
+* Use the complete-task command to submit the results of ideas
+
+(You can call create-task again to restart a task)
 
 You're only to access the queries specific to your bearer token from
 referee. The orchestrator that started you will check your work against

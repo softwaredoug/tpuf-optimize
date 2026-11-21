@@ -131,6 +131,27 @@ Respond with REJECTED if the holdout was not improved
 
 Store accepted solutions in a git branch for later review and analysis.
 
+Subagents should store the metric results of their work in git commits.
+
+## Benchmarking and leaderboard
+
+You may be asked to benchmark the top N leaders. Plus baselines on an explicit benchmark holdout generated
+from referee. Use 5000 queries for the final benchmark. We'll call this split 'benchmark' and it should
+be created from a new referee session.
+
+We want to capture
+- NDCG@10 on this 5000 query split
+- per-query latency
+
+Variants to measure
+- top 10 according to the commits of the top N leaders
+- 2 baselines: just KNN of the voyage embedding model PLUS the naive BM25
+
+While caching may be used during simple evaluation of NDCG, no cache should be used during this final benchmark
+as we want realistic, cold latency.
+
+Report NDCG@10 and per-query latency summaries in the README leaderboard.
+
 ## Keep looping
 
 Loop working with the subagent, for up to 5-10 iterations.
