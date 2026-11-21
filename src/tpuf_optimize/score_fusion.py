@@ -19,7 +19,8 @@ from typing import Any
 
 
 RRF_RANK_CONSTANT = 10
-RRF_TOP_K_PER_ARM = 10
+RRF_CANDIDATES_PER_ARM = 100
+RRF_FINAL_TOP_K = 10
 RRF_DENSE_WEIGHT = 2
 RRF_LEXICAL_WEIGHT = 1
 
@@ -140,17 +141,17 @@ def fuse_rrf(
     dense: Sequence[Mapping[str, Any]],
     lexical: Sequence[Mapping[str, Any]],
 ) -> list[tuple[str, float]]:
-    """Parent-compatible weighted RRF over each arm's first ten ranked hits.
+    """Parent-compatible weighted RRF over top 100 per arm, returning top 10.
 
     The cache stores each arm in rank order. Building the union dense-first
     and relying on stable score sorting preserves the parent's tie behavior.
     """
     dense_ranked = list(
         _score_map(dense, lower_is_better=True)
-    )[:RRF_TOP_K_PER_ARM]
+    )[:RRF_CANDIDATES_PER_ARM]
     lexical_ranked = list(
         _score_map(lexical, lower_is_better=False)
-    )[:RRF_TOP_K_PER_ARM]
+    )[:RRF_CANDIDATES_PER_ARM]
     combined: dict[str, float] = {}
     for rank, document_id in enumerate(dense_ranked, start=1):
         combined[document_id] = RRF_DENSE_WEIGHT / (RRF_RANK_CONSTANT + rank)
@@ -158,7 +159,7 @@ def fuse_rrf(
         combined[document_id] = combined.get(document_id, 0.0) + (
             RRF_LEXICAL_WEIGHT / (RRF_RANK_CONSTANT + rank)
         )
-    return sorted(combined.items(), key=lambda item: -item[1])
+    return sorted(combined.items(), key=lambda item: -item[1])[:RRF_FINAL_TOP_K]
 
 
 def load_candidates(path: Path) -> dict[str, dict[str, Any]]:

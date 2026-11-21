@@ -85,7 +85,7 @@ class ScoreFusionTests(unittest.TestCase):
                          {"d2", "l2", "shared"})
         self.assertEqual(results[0][0], "shared")
 
-    def test_rrf_uses_first_ten_from_each_top_hundred_arm(self) -> None:
+    def test_rrf_ranks_top_hundred_per_arm_then_returns_final_top_ten(self) -> None:
         dense = [
             candidate(f"d{rank}", float(101 - rank))
             for rank in range(1, 101)
@@ -94,13 +94,45 @@ class ScoreFusionTests(unittest.TestCase):
 
         results = dict(fuse_rrf(dense, lexical))
 
-        self.assertEqual(len(results), 20)
+        self.assertEqual(len(results), 10)
         self.assertEqual(results["d1"], 2 / 11)
         self.assertEqual(results["d10"], 2 / 20)
-        self.assertEqual(results["l1"], 1 / 11)
-        self.assertEqual(results["l10"], 1 / 20)
+        self.assertNotIn("l1", results)
         self.assertNotIn("d11", results)
         self.assertNotIn("l11", results)
+
+    def test_rank_eleven_overlap_can_enter_final_top_ten_like_parent(self) -> None:
+        dense = [
+            candidate(f"d{rank}", float(101 - rank))
+            for rank in range(1, 101)
+        ]
+        lexical = [
+            candidate(f"l{rank}", float(101 - rank))
+            for rank in range(1, 101)
+        ]
+        dense[10] = candidate("shared-rank-eleven", 90.0)
+        lexical[10] = candidate("shared-rank-eleven", 90.0)
+
+        # Pinned parent behavior: fuse all top-100 arm candidates, rank by
+        # weighted reciprocal rank with k=10, stable dense-first ties, then
+        # truncate only the fused output to ten.
+        expected_scores: dict[str, float] = {}
+        for rank, item in enumerate(dense[:100], start=1):
+            document_id = str(item["doc_id"])
+            expected_scores[document_id] = 2 / (10 + rank)
+        for rank, item in enumerate(lexical[:100], start=1):
+            document_id = str(item["doc_id"])
+            expected_scores[document_id] = expected_scores.get(document_id, 0.0) + (
+                1 / (10 + rank)
+            )
+        expected = sorted(
+            expected_scores.items(), key=lambda item: -item[1]
+        )[:10]
+
+        actual = fuse_rrf(dense, lexical)
+
+        self.assertEqual(actual, expected)
+        self.assertIn("shared-rank-eleven", dict(actual))
 
     def test_rrf_equal_scores_keep_dense_first_insertion_order(self) -> None:
         dense = [
