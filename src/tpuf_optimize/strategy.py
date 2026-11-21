@@ -30,6 +30,7 @@ class TPufStrategy:
         hybrid_weights: tuple[float, float] | None = (2.0, 1.0),
         rank_constant: int = 10,
         short_query_weights: tuple[float, float] | None = None,
+        short_query_max_tokens: int = 2,
     ) -> None:
         for name, weights in (
             ("hybrid_weights", hybrid_weights),
@@ -49,15 +50,21 @@ class TPufStrategy:
                 )
         if rank_constant < 0:
             raise ValueError("rank_constant must not be negative")
+        if short_query_max_tokens < 1:
+            raise ValueError("short_query_max_tokens must be at least one")
         self.hybrid_weights = hybrid_weights
         self.rank_constant = rank_constant
         self.short_query_weights = short_query_weights
+        self.short_query_max_tokens = short_query_max_tokens
 
     def weights_for_query(self, query_text: str) -> tuple[float, float] | None:
         """Use lexical-heavy fusion for concise queries when explicitly enabled."""
         if self.hybrid_weights is None:
             return None
-        if len(query_text.split()) <= 2 and self.short_query_weights is not None:
+        if (
+            len(query_text.split()) <= self.short_query_max_tokens
+            and self.short_query_weights is not None
+        ):
             return self.short_query_weights
         return self.hybrid_weights
 
