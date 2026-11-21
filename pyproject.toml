@@ -15,6 +15,8 @@ dependencies = [
 [project.scripts]
 index-esci = "tpuf_optimize.index_esci:main"
 query = "tpuf_optimize.query_batch:main"
+collect-computed-candidates = "tpuf_optimize.computed_feature_collector:main"
+rank-computed-features = "tpuf_optimize.computed_feature_rank:ablation_main"
 
 [dependency-groups]
 dev = [

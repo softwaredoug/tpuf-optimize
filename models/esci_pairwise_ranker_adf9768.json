@@ -1,0 +1,28 @@
+{
+  "feature_names": [
+    "dense_present",
+    "lexical_present",
+    "dense_rank_rrf",
+    "lexical_rank_rrf",
+    "rrf_2_1",
+    "dense_score_z",
+    "lexical_score_z",
+    "title_query_coverage",
+    "title_token_precision",
+    "title_exact_phrase",
+    "title_length_log"
+  ],
+  "weights": [
+    0.5931299463280342,
+    0.2939558393215667,
+    0.030715889987590318,
+    -0.01886335135492115,
+    0.04256842862025963,
+    -0.5190958092760491,
+    0.10059138050014022,
+    0.9749105492688627,
+    0.3435711007930892,
+    0.05695677130909598,
+    0.162010176950452
+  ]
+}

@@ -59,3 +59,43 @@ with title weighted twice as heavily. Queries with no hits are emitted with the
 `TPufStrategy` owns the ESCI document mapping, namespace schema, and query
 construction. The outer `Indexer` and `Searcher` handle batched namespace I/O,
 so relevance experiments can focus on the strategy without changing the runners.
+
+## Computed-feature candidate experiment
+
+`collect-computed-candidates` is a separate, opt-in collection mode based on the
+pinned training collector. For each training query it issues exactly two
+top-100 requests: the existing `passage__embed__voyage_4` ANN query and the
+existing weighted locale-specific title/description BM25 query, both filtered
+by locale. Each arm adds `title_bm25`, `passage_bm25`, and `brand_bm25` through
+`compute_attributes`; these response-only expressions do not affect matching
+or ranking. Binary full-query title coverage is computed from the returned
+title, because the compute-attributes expression set does not provide a
+conditional/boolean token-coverage operator. No second embedding, vector
+distance, or reranking model is requested. Missing/unsupported BM25 values are
+recorded as `null`, while numeric zero remains `0.0`; the offline ranker adds
+availability indicators so missing values are not silently treated as zero.
+
+Do not collect this feature cache until the paired smoke test has run and the
+available lexical query slot is approved. The initial implementation is
+synthetic-test-only. When permitted, a ~1,000-query training collection costs
+exactly 2,000 top-100 arm queries, with one embedding only on each dense arm
+(no extra Voyage request); the resumable command is:
+
+```sh
+uv run collect-computed-candidates
+```
+
+With an enriched cache and matching training grades, compare the frozen
+`adf9768` model, a same-fold base-feature refit, and an enriched-feature refit:
+
+```sh
+uv run rank-computed-features \
+  --candidates /path/to/computed_candidates.jsonl \
+  --grades /path/to/training_grades.jsonl \
+  --output-dir /path/to/ablation
+```
+
+All three rankers use the same deterministic query-disjoint train/validation
+fold and identical candidate lists. The experiment writes validation CSVs,
+weight artifacts, and an aggregate report; labels never enter feature
+extraction or ranking.
