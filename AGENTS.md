@@ -148,7 +148,7 @@ Variants to measure
 - 2 baselines: just KNN of the voyage embedding model PLUS the naive BM25
 
 While caching may be used during simple evaluation of NDCG, no cache should be used during this final benchmark
-as we want realistic, cold latency.
+as we want realistic, cold latency. That means given the above numbers, we would have (10 + 2) * 5000 queries.
 
 Report NDCG@10 and per-query latency summaries in the README leaderboard.
 
