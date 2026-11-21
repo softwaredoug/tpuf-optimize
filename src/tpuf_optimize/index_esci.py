@@ -22,6 +22,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--limit", type=int)
     parser.add_argument(
+        "--combined-text",
+        action="store_true",
+        help="Index title-emphasized combined text for the experimental strategy.",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Load and count corpus documents without writing them.",
@@ -42,7 +47,7 @@ def main(argv: list[str] | None = None) -> int:
     # cheat-at-search loads the product dataset lazily on this import.
     from cheat_at_search.esci_data import corpus  # type: ignore[attr-defined]
 
-    strategy = TPufStrategy()
+    strategy = TPufStrategy(combined_text=args.combined_text)
     documents = strategy.documents(corpus, args.limit)
     total_rows = len(corpus)
     if args.limit is not None:

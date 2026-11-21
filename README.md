@@ -45,6 +45,10 @@ Turbopuffer's multi-query API. Queries combine BM25 title and description scores
 with title weighted twice as heavily. Queries with no hits are emitted with the
 `-1,-1,-1` sentinel row.
 
+Pass `--combined-text` to both `index-esci` and `query` to use the experimental
+combined field. It repeats title text and includes description, brand, bullet
+point, category, and color; retrieval adds its BM25 score at a lower weight.
+
 ## Search architecture
 
 `TPufStrategy` owns the ESCI document mapping, namespace schema, and query

@@ -16,6 +16,8 @@ class TPufStrategy:
 
     TITLE_WEIGHT = 2.0
     DESCRIPTION_WEIGHT = 1.0
+    COMBINED_WEIGHT = 0.5
+    COMBINED_TEXT = "combined_text"
 
     TEXT_COLUMNS = {
         "title": "title",
@@ -27,13 +29,19 @@ class TPufStrategy:
     }
     DOCUMENT_COLUMNS = {**TEXT_COLUMNS, "locale": "product_locale"}
 
+    def __init__(self, combined_text: bool = False) -> None:
+        self.combined_text = combined_text
+
     @property
     def schema(self) -> dict[str, AttributeSchemaParam]:
         """Schema for the strategy's full-text indexed attributes."""
-        return {
+        schema: dict[str, AttributeSchemaParam] = {
             name: {"type": "string", "full_text_search": True}
             for name in self.TEXT_COLUMNS
         }
+        if self.combined_text:
+            schema[self.COMBINED_TEXT] = {"type": "string", "full_text_search": True}
+        return schema
 
     @staticmethod
     def _as_text(value: object) -> str | None:
@@ -61,34 +69,58 @@ class TPufStrategy:
         }
 
         emitted = 0
+        seen_document_ids: set[str] = set()
         for values in corpus[selected_columns].itertuples(index=False, name=None):
             if limit is not None and emitted >= limit:
                 break
             document_id = self._as_text(values[0])
-            if document_id is None:
+            if document_id is None or document_id in seen_document_ids:
                 continue
+            seen_document_ids.add(document_id)
 
             document: dict[str, Any] = {"id": document_id}
             for source, value in zip(selected_columns[1:], values[1:]):
                 text = self._as_text(value)
                 if text is not None:
                     document[output_names[source]] = text
+            if self.combined_text:
+                combined_parts = [
+                    part
+                    for field in (
+                        "title",
+                        "title",
+                        "description",
+                        "brand",
+                        "bullet_point",
+                        "category",
+                        "color",
+                    )
+                    if (part := document.get(field))
+                ]
+                if combined_parts:
+                    document[self.COMBINED_TEXT] = " ".join(combined_parts)
             yield cast(RowParam, document)
             emitted += 1
 
     def rank_by(self, query_text: str) -> RankBy:
         """Build a BM25 score with title weighted twice as much as description."""
-        return (
-            "Sum",
+        fields = [
+            ("Product", self.TITLE_WEIGHT, ("title", "BM25", query_text)),
             (
-                ("Product", self.TITLE_WEIGHT, ("title", "BM25", query_text)),
+                "Product",
+                self.DESCRIPTION_WEIGHT,
+                ("description", "BM25", query_text),
+            ),
+        ]
+        if self.combined_text:
+            fields.append(
                 (
                     "Product",
-                    self.DESCRIPTION_WEIGHT,
-                    ("description", "BM25", query_text),
-                ),
-            ),
-        )
+                    self.COMBINED_WEIGHT,
+                    (self.COMBINED_TEXT, "BM25", query_text),
+                )
+            )
+        return cast(RankBy, ("Sum", tuple(fields)))
 
     def query(self, query_text: str, locale: str, top_k: int) -> Query:
         """Build one locale-filtered query for Turbopuffer's multi-query API."""

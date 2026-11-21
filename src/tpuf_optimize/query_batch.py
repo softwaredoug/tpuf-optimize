@@ -80,6 +80,11 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--top-k", type=int, default=10)
     parser.add_argument("--batch-size", type=int, default=100)
+    parser.add_argument(
+        "--combined-text",
+        action="store_true",
+        help="Search combined text in addition to title and description.",
+    )
     return parser
 
 
@@ -97,7 +102,8 @@ def main(argv: list[str] | None = None) -> int:
         requests = _read_queries(args.queries)
         with Turbopuffer(region=args.region) as client:
             namespace = client.namespace(args.namespace)
-            searcher = Searcher(namespace, TPufStrategy(), args.batch_size)
+            strategy = TPufStrategy(combined_text=args.combined_text)
+            searcher = Searcher(namespace, strategy, args.batch_size)
             _write_results(args.output, requests, searcher, args.top_k)
     except (OSError, ValueError) as error:
         parser.error(str(error))
