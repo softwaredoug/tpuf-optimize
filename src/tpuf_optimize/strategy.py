@@ -15,9 +15,6 @@ from turbopuffer.types.namespace_multi_query_params import Query
 class TPufStrategy:
     """Own the fields, analyzers, embeddings, and queries under experimentation."""
 
-    TITLE_WEIGHT = 2.0
-    DESCRIPTION_WEIGHT = 1.0
-
     EMBEDDING_MODEL = "voyage/voyage-4"
     EMBEDDING_DIMS = 1024
     EMBEDDING_TYPE = "[1024]f16"
@@ -287,32 +284,20 @@ class TPufStrategy:
             yield cast(RowParam, document)
             emitted += 1
 
-    def rank_by(self, query_text: str, locale: str) -> RankBy:
-        """Build the locale-appropriate weighted title/description BM25 query."""
-        locale_analyzer = self.LOCALE_ANALYZERS.get(locale)
-        suffix = (
-            locale_analyzer[0]
-            if locale_analyzer is not None
-            else self.DEFAULT_ANALYZER
-        )
+    def rank_by(self, query_text: str) -> RankBy:
+        """Rank only by exact distance to the indexed Voyage-4 passage vector."""
         return (
-            "Sum",
+            "embedding__voyage_4__passage",
+            "kNN",
             (
-                (
-                    "Product",
-                    self.TITLE_WEIGHT,
-                    (f"title__{suffix}", "BM25", query_text),
-                ),
-                (
-                    "Product",
-                    self.DESCRIPTION_WEIGHT,
-                    (f"description__{suffix}", "BM25", query_text),
-                ),
+                "Embed",
+                query_text,
+                {"model": self.EMBEDDING_MODEL},
             ),
         )
 
     def query(self, query_text: str, locale: str, top_k: int) -> Query:
-        """Build one locale-filtered query for Turbopuffer's multi-query API."""
+        """Build one locale-filtered, Voyage-4 dense-vector query."""
         if not query_text.strip():
             raise ValueError("query_text must not be empty")
         if not locale.strip():
@@ -320,7 +305,7 @@ class TPufStrategy:
         if top_k < 1:
             raise ValueError("top_k must be greater than zero")
         return {
-            "rank_by": self.rank_by(query_text, locale),
+            "rank_by": self.rank_by(query_text),
             "filters": ("locale", "Eq", locale),
             "top_k": top_k,
             "include_attributes": ["title", "description", "locale"],

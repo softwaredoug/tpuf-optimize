@@ -114,14 +114,17 @@ class TPufStrategyTests(unittest.TestCase):
             document["passage__embed__voyage_4"], "Only the description"
         )
 
-    def test_default_query_selects_locale_analyzer(self) -> None:
-        us_query = self.strategy.query("blue shoe", "us", top_k=10)
-        es_query = self.strategy.query("zapato azul", "es", top_k=10)
-        jp_query = self.strategy.query("青い靴", "jp", top_k=10)
-
-        self.assertIn("title__word_v4__en__stem_stop", str(us_query["rank_by"]))
-        self.assertIn("title__word_v4__es__stem_stop_fold", str(es_query["rank_by"]))
-        self.assertIn("title__kuromoji__ja", str(jp_query["rank_by"]))
+    def test_queries_use_only_exact_voyage_passage_knn(self) -> None:
+        for locale, text in (("us", "blue shoe"), ("es", "zapato azul"), ("jp", "青い靴")):
+            with self.subTest(locale=locale):
+                query = self.strategy.query(text, locale, top_k=10)
+                self.assertEqual(query["rank_by"], (
+                    "embedding__voyage_4__passage",
+                    "kNN",
+                    ("Embed", text, {"model": "voyage/voyage-4"}),
+                ))
+                self.assertEqual(query["filters"], ("locale", "Eq", locale))
+                self.assertEqual(query["top_k"], 10)
 
     def test_pretokenizer_handles_latin_and_japanese(self) -> None:
         self.assertEqual(
