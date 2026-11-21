@@ -64,6 +64,9 @@ class TrainingJudgmentTests(unittest.TestCase):
         self.assertEqual(
             parsed[0]["targets"], [{"doc_id": "dense-1", "grade": 3}]
         )
+        body["queries"]["q1"]["target"][0]["relevance_grade"] = 0
+        zero_target = _parse_debug_batch(body, requests, records)
+        self.assertEqual(zero_target[0]["targets"][0]["grade"], 0)
 
     def test_training_judgments_checkpoint_and_output_are_aggregate_safe(self) -> None:
         requests = [

@@ -297,7 +297,7 @@ def _parse_debug_batch(
                     or not isinstance(item.get("doc_id"), str)
                     or isinstance(item.get("relevance_grade"), bool)
                     or not isinstance(item.get("relevance_grade"), int)
-                    or item["relevance_grade"] <= 0
+                    or item["relevance_grade"] < 0
                 ):
                     raise ValueError("Referee target judgment is malformed.")
                 targets.append(
