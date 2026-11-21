@@ -18,7 +18,8 @@ from pathlib import Path
 from typing import Any
 
 
-DEFAULT_RRF_CONSTANT = 60
+RRF_RANK_CONSTANT = 10
+RRF_TOP_K_PER_ARM = 10
 RRF_DENSE_WEIGHT = 2
 RRF_LEXICAL_WEIGHT = 1
 
@@ -138,26 +139,26 @@ def fuse_convex(
 def fuse_rrf(
     dense: Sequence[Mapping[str, Any]],
     lexical: Sequence[Mapping[str, Any]],
-    *,
-    constant: int = DEFAULT_RRF_CONSTANT,
 ) -> list[tuple[str, float]]:
-    """Weighted RRF with exact 2:1 dense-to-lexical contributions."""
-    if constant < 0:
-        raise ValueError("RRF constant must be non-negative")
-    dense_scores = _score_map(dense, lower_is_better=True)
-    lexical_scores = _score_map(lexical, lower_is_better=False)
-    dense_ranked = sorted(dense_scores, key=lambda doc_id: (-dense_scores[doc_id], doc_id))
-    lexical_ranked = sorted(
-        lexical_scores, key=lambda doc_id: (-lexical_scores[doc_id], doc_id)
-    )
+    """Parent-compatible weighted RRF over each arm's first ten ranked hits.
+
+    The cache stores each arm in rank order. Building the union dense-first
+    and relying on stable score sorting preserves the parent's tie behavior.
+    """
+    dense_ranked = list(
+        _score_map(dense, lower_is_better=True)
+    )[:RRF_TOP_K_PER_ARM]
+    lexical_ranked = list(
+        _score_map(lexical, lower_is_better=False)
+    )[:RRF_TOP_K_PER_ARM]
     combined: dict[str, float] = {}
     for rank, document_id in enumerate(dense_ranked, start=1):
-        combined[document_id] = RRF_DENSE_WEIGHT / (constant + rank)
+        combined[document_id] = RRF_DENSE_WEIGHT / (RRF_RANK_CONSTANT + rank)
     for rank, document_id in enumerate(lexical_ranked, start=1):
         combined[document_id] = combined.get(document_id, 0.0) + (
-            RRF_LEXICAL_WEIGHT / (constant + rank)
+            RRF_LEXICAL_WEIGHT / (RRF_RANK_CONSTANT + rank)
         )
-    return sorted(combined.items(), key=lambda item: (-item[1], item[0]))
+    return sorted(combined.items(), key=lambda item: -item[1])
 
 
 def load_candidates(path: Path) -> dict[str, dict[str, Any]]:

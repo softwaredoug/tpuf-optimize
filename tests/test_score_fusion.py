@@ -71,21 +71,60 @@ class ScoreFusionTests(unittest.TestCase):
             fuse_rrf(
                 [candidate("dense-first", 0.01)],
                 [candidate("lex-first", 9.0)],
-                constant=0,
             )
         )
-        self.assertEqual(results["dense-first"], 2.0)
-        self.assertEqual(results["lex-first"], 1.0)
+        self.assertEqual(results["dense-first"], 2 / 11)
+        self.assertEqual(results["lex-first"], 1 / 11)
 
     def test_rrf_rank_order_uses_score_direction_and_union(self) -> None:
         results = fuse_rrf(
-            [candidate("d2", 0.2), candidate("shared", 0.1)],
-            [candidate("l2", 1.0), candidate("shared", 2.0)],
-            constant=60,
+            [candidate("shared", 0.1), candidate("d2", 0.2)],
+            [candidate("shared", 2.0), candidate("l2", 1.0)],
         )
         self.assertEqual({document_id for document_id, _ in results},
                          {"d2", "l2", "shared"})
         self.assertEqual(results[0][0], "shared")
+
+    def test_rrf_uses_first_ten_from_each_top_hundred_arm(self) -> None:
+        dense = [
+            candidate(f"d{rank}", float(101 - rank))
+            for rank in range(1, 101)
+        ]
+        lexical = [candidate(f"l{rank}", float(101 - rank)) for rank in range(1, 101)]
+
+        results = dict(fuse_rrf(dense, lexical))
+
+        self.assertEqual(len(results), 20)
+        self.assertEqual(results["d1"], 2 / 11)
+        self.assertEqual(results["d10"], 2 / 20)
+        self.assertEqual(results["l1"], 1 / 11)
+        self.assertEqual(results["l10"], 1 / 20)
+        self.assertNotIn("d11", results)
+        self.assertNotIn("l11", results)
+
+    def test_rrf_equal_scores_keep_dense_first_insertion_order(self) -> None:
+        dense = [
+            candidate(f"d{rank}", float(11 - rank))
+            for rank in range(1, 11)
+        ]
+        dense[7] = candidate("shared-at-dense-eight", 3.0)
+        lexical = [
+            candidate(f"l{rank}", float(11 - rank))
+            for rank in range(1, 11)
+        ]
+        lexical[7] = candidate("shared-at-dense-eight", 3.0)
+
+        results = fuse_rrf(dense, lexical)
+        scores = dict(results)
+
+        self.assertEqual(scores["d2"], 2 / 12)
+        self.assertEqual(scores["shared-at-dense-eight"], 2 / 18 + 1 / 18)
+        self.assertEqual(scores["d2"], scores["shared-at-dense-eight"])
+        ordered_ids = [document_id for document_id, _ in results]
+        self.assertLess(
+            ordered_ids.index("d2"),
+            ordered_ids.index("shared-at-dense-eight"),
+        )
 
     def test_duplicate_or_nonfinite_candidates_are_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "Duplicate"):
