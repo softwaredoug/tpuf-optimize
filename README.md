@@ -87,20 +87,22 @@ The Pareto charts use full-split NDCG; pending variants are not plotted.
 
 <!-- esci-benchmark:start -->
 
+Scored variants used the same 5,000 Referee queries. The second NDCG column covers the 4,861 queries not found in 51 available historical task artifacts.
+
 | Variant | NDCG@10 (full) | NDCG@10 (disjoint) | p50 (ms) | p95 (ms) | Commit |
 |---|---:|---:|---:|---:|---|
-| [Typed + computed reranker](https://github.com/softwaredoug/tpuf-optimize/tree/innovate-typed-computed-ltr) | Pending | — | — | — | [`6508e87`](https://github.com/softwaredoug/tpuf-optimize/commit/6508e87) |
-| [Computed-feature reranker](https://github.com/softwaredoug/tpuf-optimize/tree/innovate-computed-ltr-features) | Pending | — | — | — | [`e64100d`](https://github.com/softwaredoug/tpuf-optimize/commit/e64100d) |
-| [Learned pairwise reranker](https://github.com/softwaredoug/tpuf-optimize/tree/research/learned-rank) | Pending | — | — | — | [`adf9768`](https://github.com/softwaredoug/tpuf-optimize/commit/adf9768) |
-| [Identifier-gated RRF](https://github.com/softwaredoug/tpuf-optimize/tree/confidence-aware-fusion) | Pending | — | — | — | [`7e22661`](https://github.com/softwaredoug/tpuf-optimize/commit/7e22661) |
-| [Deterministic product reranker](https://github.com/softwaredoug/tpuf-optimize/tree/research-product-rerank) | Pending | — | — | — | [`7ffd772`](https://github.com/softwaredoug/tpuf-optimize/commit/7ffd772) |
-| [Min-max score fusion](https://github.com/softwaredoug/tpuf-optimize/tree/research-score-fusion) | Pending | — | — | — | [`41e64d4`](https://github.com/softwaredoug/tpuf-optimize/commit/41e64d4) |
-| [2:1 Voyage-4 + BM25 RRF](https://github.com/softwaredoug/tpuf-optimize/tree/experiment-6-hybrid-rrf) | Pending | — | — | — | [`cc5fc8a`](https://github.com/softwaredoug/tpuf-optimize/commit/cc5fc8a) |
-| [Four-channel RRF](https://github.com/softwaredoug/tpuf-optimize/tree/exp7-rank-fusion) | Pending | — | — | — | [`3f4c9bc`](https://github.com/softwaredoug/tpuf-optimize/commit/3f4c9bc) |
-| [Passage BM25 + fuzzy title/brand](https://github.com/softwaredoug/tpuf-optimize/tree/exp3-bm25-passage-fuzzy) | Pending | — | — | — | [`c46c935`](https://github.com/softwaredoug/tpuf-optimize/commit/c46c935) |
-| [Title + locale-aware passage BM25](https://github.com/softwaredoug/tpuf-optimize/tree/relevance/field-weights-passage) | Pending | — | — | — | [`cdb2d64`](https://github.com/softwaredoug/tpuf-optimize/commit/cdb2d64) |
-| [Baseline: Voyage-4 exact kNN](https://github.com/softwaredoug/tpuf-optimize/tree/experiment/voyage4-only-benchmark) | Pending | — | — | — | [`3bcef44`](https://github.com/softwaredoug/tpuf-optimize/commit/3bcef44) |
-| [Baseline: weighted title/description BM25](https://github.com/softwaredoug/tpuf-optimize/tree/main) | Pending | — | — | — | [`1768df7`](https://github.com/softwaredoug/tpuf-optimize/commit/1768df7) |
+| [Typed + computed reranker](https://github.com/softwaredoug/tpuf-optimize/tree/innovate-typed-computed-ltr) | 0.41825 | 0.41771 | 180.22 | 215.46 | [`6508e87`](https://github.com/softwaredoug/tpuf-optimize/commit/6508e87) |
+| [Computed-feature reranker](https://github.com/softwaredoug/tpuf-optimize/tree/innovate-computed-ltr-features) | 0.41405 | 0.41329 | 179.54 | 252.30 | [`e64100d`](https://github.com/softwaredoug/tpuf-optimize/commit/e64100d) |
+| [Learned pairwise reranker](https://github.com/softwaredoug/tpuf-optimize/tree/research/learned-rank) | 0.40582 | 0.40517 | 110.94 | 206.48 | [`adf9768`](https://github.com/softwaredoug/tpuf-optimize/commit/adf9768) |
+| [Identifier-gated RRF](https://github.com/softwaredoug/tpuf-optimize/tree/confidence-aware-fusion) | 0.40152 | 0.40100 | 104.75 | 171.69 | [`7e22661`](https://github.com/softwaredoug/tpuf-optimize/commit/7e22661) |
+| [Deterministic product reranker](https://github.com/softwaredoug/tpuf-optimize/tree/research-product-rerank) | 0.39209 | 0.39147 | 130.64 | 184.08 | [`7ffd772`](https://github.com/softwaredoug/tpuf-optimize/commit/7ffd772) |
+| [Min-max score fusion](https://github.com/softwaredoug/tpuf-optimize/tree/research-score-fusion) | 0.39180 | 0.39126 | 107.18 | 142.44 | [`41e64d4`](https://github.com/softwaredoug/tpuf-optimize/commit/41e64d4) |
+| [2:1 Voyage-4 + BM25 RRF](https://github.com/softwaredoug/tpuf-optimize/tree/experiment-6-hybrid-rrf) | 0.38454 | 0.38382 | 134.50 | 207.70 | [`cc5fc8a`](https://github.com/softwaredoug/tpuf-optimize/commit/cc5fc8a) |
+| [Passage BM25 + fuzzy title/brand](https://github.com/softwaredoug/tpuf-optimize/tree/exp3-bm25-passage-fuzzy) | 0.37588 | 0.37519 | 67.03 | 106.56 | [`c46c935`](https://github.com/softwaredoug/tpuf-optimize/commit/c46c935) |
+| [Title + locale-aware passage BM25](https://github.com/softwaredoug/tpuf-optimize/tree/relevance/field-weights-passage) | 0.37469 | 0.37398 | 60.28 | 79.78 | [`cdb2d64`](https://github.com/softwaredoug/tpuf-optimize/commit/cdb2d64) |
+| [Four-channel RRF](https://github.com/softwaredoug/tpuf-optimize/tree/exp7-rank-fusion) | 0.37407 | 0.37316 | 125.09 | 203.82 | [`3f4c9bc`](https://github.com/softwaredoug/tpuf-optimize/commit/3f4c9bc) |
+| [Baseline: Voyage-4 ANN (Turbopuffer)](https://github.com/softwaredoug/tpuf-optimize/tree/experiment-6-hybrid-rrf) | 0.36286 | 0.36236 | 97.85 | 124.41 | [`cc5fc8a`](https://github.com/softwaredoug/tpuf-optimize/commit/cc5fc8a) |
+| [Baseline: weighted title/description BM25](https://github.com/softwaredoug/tpuf-optimize/tree/main) | 0.31331 | 0.31266 | 59.76 | 72.38 | [`1768df7`](https://github.com/softwaredoug/tpuf-optimize/commit/1768df7) |
 
 ![ESCI NDCG@10 versus p50 latency](assets/esci-pareto-p50.svg)
 

@@ -39,3 +39,7 @@ class FrozenVariantTests(unittest.TestCase):
                     self.assertEqual(retries, 0)
                 expected_calls = 4 if variant.slug in {"computed", "typed"} else 2
                 self.assertEqual(len(namespace.calls), expected_calls)
+                if variant.slug == "voyage":
+                    rank_by = namespace.calls[0][0]["rank_by"]
+                    self.assertEqual(rank_by[0], "passage__embed__voyage_4")
+                    self.assertEqual(rank_by[1], "ANN")

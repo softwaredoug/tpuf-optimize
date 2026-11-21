@@ -37,8 +37,8 @@ VARIANTS = (
             "exp3-bm25-passage-fuzzy", .37768),
     Variant("passage", "Title + locale-aware passage BM25", "cdb2d64",
             "relevance/field-weights-passage", .37658),
-    Variant("voyage", "Baseline: Voyage-4 exact kNN", "3bcef44",
-            "experiment/voyage4-only-benchmark", .37443),
+    Variant("voyage", "Baseline: Voyage-4 ANN (Turbopuffer)", "cc5fc8a",
+            "experiment-6-hybrid-rrf", .37443),
     Variant("bm25", "Baseline: weighted title/description BM25", "1768df7", "main", .32220),
 )
 
@@ -142,6 +142,10 @@ class FrozenSearcher(Searcher):
         text, locale = request.text, request.locale
         slug = self.slug
         if self.direct:
+            if slug == "voyage":
+                ann_query = self.frozen.hybrid_queries(text, locale, top_k)[0]
+                ann_query["top_k"] = top_k
+                return self._retrieve([ann_query])
             return self._retrieve([self.frozen.query(text, locale, top_k)])
         if slug == "hybrid":
             rows = self._retrieve(self.frozen.hybrid_queries(text, locale, top_k))
