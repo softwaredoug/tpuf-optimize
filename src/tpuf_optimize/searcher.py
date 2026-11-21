@@ -93,9 +93,14 @@ class Searcher:
                 if hybrid is None:
                     yield request, rows[0]
                 else:
+                    weights = self.strategy.weights_for_query(request.text)
+                    if weights is None:
+                        raise ValueError(
+                            "hybrid strategy did not provide query weights"
+                        )
                     yield request, self.strategy.reciprocal_rank_fusion(
                         rows,
-                        weights=hybrid,
+                        weights=weights,
                         rank_constant=self.strategy.rank_constant,
                         top_k=top_k,
                     )

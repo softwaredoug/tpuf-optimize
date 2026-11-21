@@ -29,23 +29,37 @@ class TPufStrategy:
         self,
         hybrid_weights: tuple[float, float] | None = (2.0, 1.0),
         rank_constant: int = 10,
+        short_query_weights: tuple[float, float] | None = None,
     ) -> None:
-        if hybrid_weights is not None and (
-            len(hybrid_weights) != 2
-            or any(
-                not math.isfinite(weight) or weight < 0
-                for weight in hybrid_weights
-            )
-            or not any(weight > 0 for weight in hybrid_weights)
+        for name, weights in (
+            ("hybrid_weights", hybrid_weights),
+            ("short_query_weights", short_query_weights),
         ):
-            raise ValueError(
-                "hybrid_weights must contain two finite non-negative weights, "
-                "not both zero"
-            )
+            if weights is not None and (
+                len(weights) != 2
+                or any(
+                    not math.isfinite(weight) or weight < 0
+                    for weight in weights
+                )
+                or not any(weight > 0 for weight in weights)
+            ):
+                raise ValueError(
+                    f"{name} must contain two finite non-negative weights, "
+                    "not both zero"
+                )
         if rank_constant < 0:
             raise ValueError("rank_constant must not be negative")
         self.hybrid_weights = hybrid_weights
         self.rank_constant = rank_constant
+        self.short_query_weights = short_query_weights
+
+    def weights_for_query(self, query_text: str) -> tuple[float, float] | None:
+        """Use lexical-heavy fusion for concise queries when explicitly enabled."""
+        if self.hybrid_weights is None:
+            return None
+        if len(query_text.split()) <= 2 and self.short_query_weights is not None:
+            return self.short_query_weights
+        return self.hybrid_weights
 
     EMBEDDING_MODEL = "voyage/voyage-4"
     EMBEDDING_DIMS = 1024

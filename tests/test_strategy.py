@@ -144,6 +144,19 @@ class TPufStrategyTests(unittest.TestCase):
         self.assertEqual(TPufStrategy().hybrid_weights, (2.0, 1.0))
         self.assertIsNone(TPufStrategy(hybrid_weights=None).hybrid_weights)
 
+    def test_short_query_weights_are_selected_by_token_count(self) -> None:
+        strategy = TPufStrategy(short_query_weights=(1.0, 2.0))
+
+        self.assertEqual(strategy.weights_for_query("blue shoe"), (1.0, 2.0))
+        self.assertEqual(
+            strategy.weights_for_query("blue running shoe"), (2.0, 1.0)
+        )
+
+    def test_short_query_weights_are_disabled_by_default(self) -> None:
+        strategy = TPufStrategy()
+
+        self.assertEqual(strategy.weights_for_query("blue shoe"), (2.0, 1.0))
+
     def test_reciprocal_rank_fusion_combines_rankings(self) -> None:
         dense = [
             Row.from_dict({"id": "shared", "$dist": 0.2}),
