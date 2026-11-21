@@ -19,27 +19,46 @@ class Variant:
     revision: str
     branch: str
     historical_ndcg: float
+    uses_voyage4_query_embedding: bool
 
 
 # Previous holdout scores are selection evidence, not scores on the new split.
 VARIANTS = (
-    Variant("typed", "Typed + computed reranker", "6508e87", "innovate-typed-computed-ltr", .42305),
+    Variant(
+        "typed", "Typed + computed reranker", "6508e87",
+        "innovate-typed-computed-ltr", .42305, True,
+    ),
     Variant("computed", "Computed-feature reranker", "e64100d",
-            "innovate-computed-ltr-features", .41592),
-    Variant("learned", "Learned pairwise reranker", "adf9768", "research/learned-rank", .41094),
-    Variant("identifier", "Identifier-gated RRF", "7e22661", "confidence-aware-fusion", .40316),
+            "innovate-computed-ltr-features", .41592, True),
+    Variant(
+        "learned", "Learned pairwise reranker", "adf9768",
+        "research/learned-rank", .41094, True,
+    ),
+    Variant(
+        "identifier", "Identifier-gated RRF", "7e22661",
+        "confidence-aware-fusion", .40316, True,
+    ),
     Variant("product", "Deterministic product reranker", "7ffd772",
-            "research-product-rerank", .39691),
-    Variant("minmax", "Min-max score fusion", "41e64d4", "research-score-fusion", .39538),
-    Variant("hybrid", "2:1 Voyage-4 + BM25 RRF", "cc5fc8a", "experiment-6-hybrid-rrf", .39500),
-    Variant("four", "Four-channel RRF", "3f4c9bc", "exp7-rank-fusion", .39064),
+            "research-product-rerank", .39691, True),
+    Variant(
+        "minmax", "Min-max score fusion", "41e64d4",
+        "research-score-fusion", .39538, True,
+    ),
+    Variant(
+        "hybrid", "2:1 Voyage-4 + BM25 RRF", "cc5fc8a",
+        "experiment-6-hybrid-rrf", .39500, True,
+    ),
+    Variant("four", "Four-channel RRF", "3f4c9bc", "exp7-rank-fusion", .39064, True),
     Variant("fuzzy", "Passage BM25 + fuzzy title/brand", "c46c935",
-            "exp3-bm25-passage-fuzzy", .37768),
+            "exp3-bm25-passage-fuzzy", .37768, False),
     Variant("passage", "Title + locale-aware passage BM25", "cdb2d64",
-            "relevance/field-weights-passage", .37658),
+            "relevance/field-weights-passage", .37658, False),
     Variant("voyage", "Baseline: Voyage-4 ANN (Turbopuffer)", "cc5fc8a",
-            "experiment-6-hybrid-rrf", .37443),
-    Variant("bm25", "Baseline: weighted title/description BM25", "1768df7", "main", .32220),
+            "experiment-6-hybrid-rrf", .37443, True),
+    Variant(
+        "bm25", "Baseline: weighted title/description BM25", "1768df7",
+        "main", .32220, False,
+    ),
 )
 
 

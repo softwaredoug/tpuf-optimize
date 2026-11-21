@@ -102,5 +102,33 @@
       "p95_ms": 72.3788330797106,
       "retries_429": 0
     }
+  },
+  "cost_estimates": {
+    "currency": "USD",
+    "unit": "per user query",
+    "method": "Voyage-4 native embedding; UTF-8 query bytes / 4 token proxy",
+    "query_text_bytes": 109126,
+    "voyage4_query_tokens_proxy": 27281.5,
+    "voyage4_embedding_usd_per_million_tokens": 0.06,
+    "voyage4_embedding_usd_per_query": 3.2737799999999996e-07,
+    "voyage4_embedding_usd_total": 0.0016368899999999998,
+    "variant_cost_per_query_usd": {
+      "typed": 3.2737799999999996e-07,
+      "computed": 3.2737799999999996e-07,
+      "learned": 3.2737799999999996e-07,
+      "identifier": 3.2737799999999996e-07,
+      "product": 3.2737799999999996e-07,
+      "minmax": 3.2737799999999996e-07,
+      "hybrid": 3.2737799999999996e-07,
+      "four": 3.2737799999999996e-07,
+      "fuzzy": 0.0,
+      "passage": 0.0,
+      "voyage": 3.2737799999999996e-07,
+      "bm25": 0.0
+    },
+    "excludes": [
+      "Turbopuffer database/storage/query charges",
+      "local CPU reranker costs"
+    ]
   }
 }

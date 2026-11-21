@@ -83,26 +83,30 @@ The final benchmark runs ten leaders selected from prior holdout results and
 two baselines, one variant at a time, on a new 5,000-query Referee split.
 Every timing and submitted top 10 comes from the same independent execution.
 Prior holdout scores and the incomplete shared-retrieval run are not included.
-The Pareto charts use full-split NDCG; pending variants are not plotted.
+The Pareto charts use full-split NDCG; pending variants are not plotted. The
+cost column estimates external embedding/reranker inference per user query;
+Turbopuffer database charges are excluded.
 
 <!-- esci-benchmark:start -->
 
 Scored variants used the same 5,000 Referee queries. The second NDCG column covers the 4,861 queries not found in 51 available historical task artifacts.
 
-| Variant | NDCG@10 (full) | NDCG@10 (disjoint) | p50 (ms) | p95 (ms) | Commit |
-|---|---:|---:|---:|---:|---|
-| [Typed + computed reranker](https://github.com/softwaredoug/tpuf-optimize/tree/innovate-typed-computed-ltr) | 0.41825 | 0.41771 | 180.22 | 215.46 | [`6508e87`](https://github.com/softwaredoug/tpuf-optimize/commit/6508e87) |
-| [Computed-feature reranker](https://github.com/softwaredoug/tpuf-optimize/tree/innovate-computed-ltr-features) | 0.41405 | 0.41329 | 179.54 | 252.30 | [`e64100d`](https://github.com/softwaredoug/tpuf-optimize/commit/e64100d) |
-| [Learned pairwise reranker](https://github.com/softwaredoug/tpuf-optimize/tree/research/learned-rank) | 0.40582 | 0.40517 | 110.94 | 206.48 | [`adf9768`](https://github.com/softwaredoug/tpuf-optimize/commit/adf9768) |
-| [Identifier-gated RRF](https://github.com/softwaredoug/tpuf-optimize/tree/confidence-aware-fusion) | 0.40152 | 0.40100 | 104.75 | 171.69 | [`7e22661`](https://github.com/softwaredoug/tpuf-optimize/commit/7e22661) |
-| [Deterministic product reranker](https://github.com/softwaredoug/tpuf-optimize/tree/research-product-rerank) | 0.39209 | 0.39147 | 130.64 | 184.08 | [`7ffd772`](https://github.com/softwaredoug/tpuf-optimize/commit/7ffd772) |
-| [Min-max score fusion](https://github.com/softwaredoug/tpuf-optimize/tree/research-score-fusion) | 0.39180 | 0.39126 | 107.18 | 142.44 | [`41e64d4`](https://github.com/softwaredoug/tpuf-optimize/commit/41e64d4) |
-| [2:1 Voyage-4 + BM25 RRF](https://github.com/softwaredoug/tpuf-optimize/tree/experiment-6-hybrid-rrf) | 0.38454 | 0.38382 | 134.50 | 207.70 | [`cc5fc8a`](https://github.com/softwaredoug/tpuf-optimize/commit/cc5fc8a) |
-| [Passage BM25 + fuzzy title/brand](https://github.com/softwaredoug/tpuf-optimize/tree/exp3-bm25-passage-fuzzy) | 0.37588 | 0.37519 | 67.03 | 106.56 | [`c46c935`](https://github.com/softwaredoug/tpuf-optimize/commit/c46c935) |
-| [Title + locale-aware passage BM25](https://github.com/softwaredoug/tpuf-optimize/tree/relevance/field-weights-passage) | 0.37469 | 0.37398 | 60.28 | 79.78 | [`cdb2d64`](https://github.com/softwaredoug/tpuf-optimize/commit/cdb2d64) |
-| [Four-channel RRF](https://github.com/softwaredoug/tpuf-optimize/tree/exp7-rank-fusion) | 0.37407 | 0.37316 | 125.09 | 203.82 | [`3f4c9bc`](https://github.com/softwaredoug/tpuf-optimize/commit/3f4c9bc) |
-| [Baseline: Voyage-4 ANN (Turbopuffer)](https://github.com/softwaredoug/tpuf-optimize/tree/experiment-6-hybrid-rrf) | 0.36286 | 0.36236 | 97.85 | 124.41 | [`cc5fc8a`](https://github.com/softwaredoug/tpuf-optimize/commit/cc5fc8a) |
-| [Baseline: weighted title/description BM25](https://github.com/softwaredoug/tpuf-optimize/tree/main) | 0.31331 | 0.31266 | 59.76 | 72.38 | [`1768df7`](https://github.com/softwaredoug/tpuf-optimize/commit/1768df7) |
+| Variant | NDCG@10 (full) | NDCG@10 (disjoint) | p50 (ms) | p95 (ms) | Cost* (USD/query) | Commit |
+|---|---:|---:|---:|---:|---:|---|
+| [Typed + computed reranker](https://github.com/softwaredoug/tpuf-optimize/tree/innovate-typed-computed-ltr) | 0.41825 | 0.41771 | 180.22 | 215.46 | $0.00000033* | [`6508e87`](https://github.com/softwaredoug/tpuf-optimize/commit/6508e87) |
+| [Computed-feature reranker](https://github.com/softwaredoug/tpuf-optimize/tree/innovate-computed-ltr-features) | 0.41405 | 0.41329 | 179.54 | 252.30 | $0.00000033* | [`e64100d`](https://github.com/softwaredoug/tpuf-optimize/commit/e64100d) |
+| [Learned pairwise reranker](https://github.com/softwaredoug/tpuf-optimize/tree/research/learned-rank) | 0.40582 | 0.40517 | 110.94 | 206.48 | $0.00000033* | [`adf9768`](https://github.com/softwaredoug/tpuf-optimize/commit/adf9768) |
+| [Identifier-gated RRF](https://github.com/softwaredoug/tpuf-optimize/tree/confidence-aware-fusion) | 0.40152 | 0.40100 | 104.75 | 171.69 | $0.00000033* | [`7e22661`](https://github.com/softwaredoug/tpuf-optimize/commit/7e22661) |
+| [Deterministic product reranker](https://github.com/softwaredoug/tpuf-optimize/tree/research-product-rerank) | 0.39209 | 0.39147 | 130.64 | 184.08 | $0.00000033* | [`7ffd772`](https://github.com/softwaredoug/tpuf-optimize/commit/7ffd772) |
+| [Min-max score fusion](https://github.com/softwaredoug/tpuf-optimize/tree/research-score-fusion) | 0.39180 | 0.39126 | 107.18 | 142.44 | $0.00000033* | [`41e64d4`](https://github.com/softwaredoug/tpuf-optimize/commit/41e64d4) |
+| [2:1 Voyage-4 + BM25 RRF](https://github.com/softwaredoug/tpuf-optimize/tree/experiment-6-hybrid-rrf) | 0.38454 | 0.38382 | 134.50 | 207.70 | $0.00000033* | [`cc5fc8a`](https://github.com/softwaredoug/tpuf-optimize/commit/cc5fc8a) |
+| [Passage BM25 + fuzzy title/brand](https://github.com/softwaredoug/tpuf-optimize/tree/exp3-bm25-passage-fuzzy) | 0.37588 | 0.37519 | 67.03 | 106.56 | $0.00000000* | [`c46c935`](https://github.com/softwaredoug/tpuf-optimize/commit/c46c935) |
+| [Title + locale-aware passage BM25](https://github.com/softwaredoug/tpuf-optimize/tree/relevance/field-weights-passage) | 0.37469 | 0.37398 | 60.28 | 79.78 | $0.00000000* | [`cdb2d64`](https://github.com/softwaredoug/tpuf-optimize/commit/cdb2d64) |
+| [Four-channel RRF](https://github.com/softwaredoug/tpuf-optimize/tree/exp7-rank-fusion) | 0.37407 | 0.37316 | 125.09 | 203.82 | $0.00000033* | [`3f4c9bc`](https://github.com/softwaredoug/tpuf-optimize/commit/3f4c9bc) |
+| [Baseline: Voyage-4 ANN (Turbopuffer)](https://github.com/softwaredoug/tpuf-optimize/tree/experiment-6-hybrid-rrf) | 0.36286 | 0.36236 | 97.85 | 124.41 | $0.00000033* | [`cc5fc8a`](https://github.com/softwaredoug/tpuf-optimize/commit/cc5fc8a) |
+| [Baseline: weighted title/description BM25](https://github.com/softwaredoug/tpuf-optimize/tree/main) | 0.31331 | 0.31266 | 59.76 | 72.38 | $0.00000000* | [`1768df7`](https://github.com/softwaredoug/tpuf-optimize/commit/1768df7) |
+
+*Estimated external model inference per user query. Voyage-4 query embedding uses a UTF-8-bytes/4 token proxy (0.06 USD/million tokens); lexical-only and local CPU rankers add no model inference charge. Excludes Turbopuffer database/query charges and index-time embedding.
 
 ![ESCI NDCG@10 versus p50 latency](assets/esci-pareto-p50.svg)
 
@@ -112,3 +116,9 @@ Scored variants used the same 5,000 Referee queries. The second NDCG column cove
 
 Refresh the table and both Pareto charts from the aggregate-only JSON with
 `uv run python scripts/render_esci_benchmark.py`.
+
+For context, the separate 1,000-query training-only native reranker experiment
+estimated about `$0.00254/query` for Cohere rerank-v3.5 and `$0.00127/query`
+for Voyage rerank-3 (25.38M input-token proxy total, divided by 1,000 queries).
+These are training-set estimates, not rows in the 5,000-query leaderboard; the
+rerank API does not return model token usage or per-request cost.
