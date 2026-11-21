@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import re
 import unicodedata
 from collections.abc import Iterable, Iterator
 from typing import Any, cast
@@ -23,6 +24,9 @@ class TPufStrategy:
 
     TITLE_WEIGHT = 2.0
     DESCRIPTION_WEIGHT = 1.0
+    FUZZY_TITLE_WEIGHT = 0.35
+    FUZZY_BRAND_WEIGHT = 0.15
+    FUZZY_QUERY_MIN_CHARS = 6
     HYBRID_CANDIDATE_DEPTH = 100
 
     def __init__(
@@ -341,6 +345,62 @@ class TPufStrategy:
             ),
         )
 
+    def hybrid_lexical_rank_by(self, query_text: str, locale: str) -> RankBy:
+        """Build passage BM25 with small fuzzy title and brand boosts."""
+        locale = self.normalize_locale(locale)
+        locale_analyzer = self.LOCALE_ANALYZERS.get(locale)
+        suffix = (
+            locale_analyzer[0]
+            if locale_analyzer is not None
+            else self.DEFAULT_ANALYZER
+        )
+        clauses: list[Any] = [
+            (f"passage__{suffix}", "BM25", query_text),
+            (
+                "Product",
+                self.TITLE_WEIGHT,
+                (f"title__{suffix}", "BM25", query_text),
+            ),
+        ]
+
+        # Fuzzy clauses provide typo tolerance without overwhelming BM25 matches.
+        if locale != "jp":
+            fuzzy_options = {
+                "max_edit_distance": [
+                    {"min_query_chars": self.FUZZY_QUERY_MIN_CHARS, "distance": 1}
+                ],
+                "case_sensitive": False,
+            }
+            for token in re.findall(r"[^\W_]+", query_text, flags=re.UNICODE):
+                if len(token) < self.FUZZY_QUERY_MIN_CHARS:
+                    continue
+                clauses.extend(
+                    (
+                        (
+                            "Product",
+                            self.FUZZY_TITLE_WEIGHT,
+                            (
+                                "title__word_v4__fuzzy",
+                                "Fuzzy",
+                                token,
+                                fuzzy_options,
+                            ),
+                        ),
+                        (
+                            "Product",
+                            self.FUZZY_BRAND_WEIGHT,
+                            (
+                                "brand__word_v4__fuzzy",
+                                "Fuzzy",
+                                token,
+                                fuzzy_options,
+                            ),
+                        ),
+                    )
+                )
+
+        return cast(RankBy, ("Sum", tuple(clauses)))
+
     @staticmethod
     def normalize_locale(locale: str) -> str:
         """Map ESCI query locales to the locale codes stored in the index."""
@@ -357,6 +417,9 @@ class TPufStrategy:
         locale = self.normalize_locale(locale)
         candidate_k = max(top_k, self.HYBRID_CANDIDATE_DEPTH)
         lexical_query = self.query(query_text, locale, candidate_k)
+        lexical_query["rank_by"] = self.hybrid_lexical_rank_by(
+            query_text, locale
+        )
         vector_query: Query = {
             "rank_by": (
                 "passage__embed__voyage_4",

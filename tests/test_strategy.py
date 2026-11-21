@@ -126,18 +126,30 @@ class TPufStrategyTests(unittest.TestCase):
         self.assertIn("title__kuromoji__ja", str(jp_query["rank_by"]))
         self.assertEqual(us_query, english_locale_query)
 
+    def test_fuzzy_boosts_are_limited_to_long_non_japanese_terms(self) -> None:
+        rank_by = str(self.strategy.hybrid_lexical_rank_by("bluetooth earbud", "en-US"))
+
+        self.assertIn("passage__word_v4__en__stem_stop", rank_by)
+        self.assertIn("title__word_v4__fuzzy", rank_by)
+        self.assertIn("brand__word_v4__fuzzy", rank_by)
+        short_query = self.strategy.hybrid_lexical_rank_by("blue shoe", "us")
+        self.assertNotIn("Fuzzy", str(short_query))
+        japanese_query = self.strategy.hybrid_lexical_rank_by("bluetooth", "ja-JP")
+        self.assertNotIn("Fuzzy", str(japanese_query))
+
     def test_hybrid_queries_use_voyage_passage_and_lexical_ranker(self) -> None:
         strategy = TPufStrategy(hybrid_weights=(1.0, 2.0))
         vector_query, lexical_query = strategy.hybrid_queries(
-            "blue shoe", "us", top_k=20
+            "bluetooth shoe", "us", top_k=20
         )
 
         self.assertEqual(
             vector_query["rank_by"],
-            ("passage__embed__voyage_4", "ANN", ("Embed", "blue shoe")),
+            ("passage__embed__voyage_4", "ANN", ("Embed", "bluetooth shoe")),
         )
         self.assertEqual(vector_query["top_k"], 100)
-        self.assertIn("title__word_v4__en__stem_stop", str(lexical_query["rank_by"]))
+        self.assertIn("passage__word_v4__en__stem_stop", str(lexical_query["rank_by"]))
+        self.assertIn("title__word_v4__fuzzy", str(lexical_query["rank_by"]))
         self.assertEqual(strategy.hybrid_weights, (1.0, 2.0))
 
     def test_hybrid_is_the_default_query_strategy(self) -> None:
