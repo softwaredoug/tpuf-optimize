@@ -20,7 +20,8 @@ Create a CLI to index ESCI dataset into Turbopuffer.
 
 - Use `from cheat_at_search.esci_data import corpus` to get a pandas dataframe of the ESCI corpus
 - Index text fields for title, description, etc
-
+- Create different variations of common text indexing strategies
+- Pick one embedding from TPuf's built-in embeddings for indexing (ie voyager-4, etc)
 
 ## Querying
 
@@ -70,17 +71,30 @@ q3,-1,-1,-1
 
 ```
 
-### Single query module
+### Modular structure
 
-Make sure that there's a clear seperation in code between a python file that issues 
-a single query. And another file that batches them up. That lets our optimizations focus
-on just the one file issuing queries.
+We want to have an outer set of code that handles batching indexing and querying to 
+the tpuf namespace.
+
+But the meat of what gets optimized is an inner TPufStrategy object it defines
+
+- namespace schema
+- how its queried
+
+With a clear search strategy (both index + query) within TPufStrategy.
+
+Generally, we want to create a single index that encompasess a large set of possible experiments
+and then delegate sub-agents different ways to use those ingredients. That way sub-agents don't
+have to re-index, and can instead quickly experiment with an existing set of ingredients.
+
+An outer Indexer will batch documents for indexing. An an outer Searcher will batch documents
+for search. These won't be the focus of relevance optimization.
 
 
 ## Optimizing relevance
 
-We will split off subagents to work on optimizing relevance. With a strategy of split management
-to avoid overfitting.
+We will split off `relevance-optimizer` subagents to work on optimizing relevance.
+With a strategy of split management to avoid overfitting using the referee service.
 
 We will focus only on the query module, using what's already been indexed.
 
@@ -92,8 +106,8 @@ completes. Have it report its branch and commit when finished.
 ## Use Referee to generate splits and delegate them
 
 A service, called referee, exists to securely generate splits between holdout and training sets.
-This lets us delegate optimizations to subagents, giving them a training split of queries, then
-keeping your own holdout to accept / reject the subagent's results.
+This lets us delegate optimizations to `relevance-optimizer` subagents, giving them a 
+a training split of queries, then keeping your own holdout to accept / reject the subagent's results.
 
 Review the service here:
 http://localhost:8080/docs
@@ -128,5 +142,3 @@ When responding, you can tell the overall metric delta, but NEVER SPECIFIC QUERI
 ## Use the batch runner to generate CSVs to submit solutions
 
 The batch query runner should generate CSVs conforming to referee's exected format of search results.
-
-## Share 
