@@ -75,15 +75,24 @@ distance, or reranking model is requested. Missing/unsupported BM25 values are
 recorded as `null`, while numeric zero remains `0.0`; the offline ranker adds
 availability indicators so missing values are not silently treated as zero.
 
-Do not collect this feature cache until the paired smoke test has run and the
-available lexical query slot is approved. The initial implementation is
-synthetic-test-only. When permitted, a ~1,000-query training collection costs
-exactly 2,000 top-100 arm queries, with one embedding only on each dense arm
-(no extra Voyage request); the resumable command is:
+The paired smoke test verified that an ID-filtered request on the pinned cached
+candidate union returns exactly the same IDs and leaves the cached dense/lexical
+ranks and raw scores untouched. Prefer this lower-cost mode when that cache is
+available: one serial request per query, `rank_by=("id", "asc")`, filtered by
+locale and the cached candidate IDs. Its `compute_attributes` are the same
+BM25 features as the paired-arm path; coverage is derived from the returned
+title. SDK retries/telemetry are disabled; explicit bounded 429 backoff and a
+per-query checkpoint are used. For 1,000 queries this costs 1,000 successful
+feature requests (each returning at most 200 candidate rows), with no Voyage
+embedding calls. The resumable command is:
 
 ```sh
-uv run collect-computed-candidates
+uv run collect-computed-candidates \
+  --source-candidates /path/to/esci_research_training_candidates.jsonl
 ```
+
+Without `--source-candidates`, the command uses the original two-arm collector
+and costs two top-100 requests per query.
 
 With an enriched cache and matching training grades, compare the frozen
 `adf9768` model, a same-fold base-feature refit, and an enriched-feature refit:

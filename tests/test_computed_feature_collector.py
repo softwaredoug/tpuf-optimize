@@ -13,6 +13,7 @@ from turbopuffer.types import Row
 
 from tpuf_optimize.computed_feature_collector import (
     ComputedFeatureQueryStrategy,
+    collect_cached_union_features,
     collect_feature_candidates,
 )
 from tpuf_optimize.searcher import SearchRequest
@@ -54,6 +55,31 @@ class FakeNamespace:
 
     def query(self, **_query):
         raise AssertionError("serial fallback was not expected")
+
+
+class FakeIdFilterNamespace:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
+    def query(self, **query):
+        self.calls.append(query)
+        _, filters = query["filters"]
+        ids = filters[1][2]
+        rows = []
+        for index, doc_id in enumerate(sorted(ids), 1):
+            rows.append(
+                Row.from_dict(
+                    {
+                        "id": doc_id,
+                        "$dist": float(index),
+                        "title": "red shoe",
+                        "title_bm25": 0.0,
+                        "passage_bm25": 1.5,
+                        "brand_bm25": None,
+                    }
+                )
+            )
+        return SimpleNamespace(rows=rows)
 
 
 class ComputedFeatureCollectorTests(unittest.TestCase):
@@ -161,6 +187,62 @@ class ComputedFeatureCollectorTests(unittest.TestCase):
         d2 = record["dense"][1]["features"]
         self.assertEqual(d2["brand_bm25"], 0.0)
         self.assertFalse(d2["title_full_coverage"])
+
+    def test_cached_union_uses_one_id_filter_and_preserves_raw_lists(self) -> None:
+        request = SearchRequest("q1", "red shoe", "us")
+        source_record = {
+            "query_id": "q1",
+            "query_text": "red shoe",
+            "locale": "us",
+            "dense": [
+                {"doc_id": "d2", "score": 0.25, "title": "red shoe"},
+                {"doc_id": "d1", "score": 0.5, "title": "red"},
+            ],
+            "lexical": [
+                {"doc_id": "d1", "score": 2.0, "title": "red"},
+                {"doc_id": "d3", "score": 1.0, "title": "shoe"},
+            ],
+        }
+        original = json.loads(json.dumps(source_record))
+        namespace = FakeIdFilterNamespace()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            report = collect_cached_union_features(
+                namespace,
+                [request],
+                [source_record],
+                "source-hash",
+                root / "output.partial",
+                root / "output.jsonl",
+                "training-task",
+            )
+            output = json.loads((root / "output.jsonl").read_text().strip())
+            resumed = collect_cached_union_features(
+                namespace,
+                [request],
+                [source_record],
+                "source-hash",
+                root / "output.partial",
+                root / "output.jsonl",
+                "training-task",
+            )
+        self.assertEqual(len(namespace.calls), 1)
+        self.assertEqual(namespace.calls[0]["rank_by"], ("id", "asc"))
+        self.assertEqual(namespace.calls[0]["top_k"], 3)
+        self.assertEqual(namespace.calls[0]["filters"][1][1][1], "In")
+        self.assertEqual(
+            [(x["doc_id"], x["score"]) for x in output["dense"]],
+            [(x["doc_id"], x["score"]) for x in original["dense"]],
+        )
+        self.assertEqual(
+            [(x["doc_id"], x["score"]) for x in output["lexical"]],
+            [(x["doc_id"], x["score"]) for x in original["lexical"]],
+        )
+        self.assertEqual(output["dense"][0]["features"]["title_bm25"], 0.0)
+        self.assertIsNone(output["dense"][0]["features"]["brand_bm25"])
+        self.assertTrue(output["dense"][0]["features"]["title_full_coverage"])
+        self.assertEqual(report["successful_feature_requests"], 1)
+        self.assertEqual(resumed["successful_feature_requests"], 1)
 
 
 if __name__ == "__main__":
