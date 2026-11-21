@@ -131,6 +131,18 @@ class ComputedFeatureRankTests(unittest.TestCase):
         for metrics in reports.values():
             self.assertEqual(metrics["evaluated_queries"], 3)
 
+    def test_training_nominee_artifact_contains_weights_only(self) -> None:
+        path = (
+            Path(__file__).resolve().parents[1]
+            / "models"
+            / "esci_pairwise_ranker_computed_features_training.json"
+        )
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(set(payload), {"feature_names", "weights"})
+        model = LinearRanker.from_json(payload)
+        self.assertEqual(model.feature_names, ENHANCED_FEATURE_NAMES)
+        self.assertEqual(len(model.weights), len(ENHANCED_FEATURE_NAMES))
+
 
 if __name__ == "__main__":
     unittest.main()

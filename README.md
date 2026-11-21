@@ -109,6 +109,13 @@ fold and identical candidate lists. The experiment writes validation CSVs,
 weight artifacts, and an aggregate report; labels never enter feature
 extraction or ranking.
 
+The training-only 750/250 split (seed 17) evaluated all 250 validation queries
+on identical cached candidate lists. NDCG@10 was `0.422458` for both frozen
+`adf9768` and the same-fold base-feature refit, and `0.428803` for the
+computed-feature refit (2:1 RRF: `0.395673`). The computed-feature weights in
+`models/esci_pairwise_ranker_computed_features_training.json` are nominated
+for independent holdout evaluation only; this is not a holdout acceptance.
+
 To obtain labels only for the assigned training split, the debug collector
 submits candidate IDs to Referee's read-only `/debug` endpoint in serial
 10-query batches, using the configured training-only task and bearer token.
