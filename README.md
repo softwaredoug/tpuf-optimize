@@ -24,12 +24,18 @@ Set `TURBOPUFFER_API_KEY`, then run:
 uv run index-esci --namespace esci-products --region gcp-us-central1
 ```
 
-The command uses `cheat_at_search.esci_data.corpus`, upserts documents in batches,
-and enables BM25 full-text search for title, description, brand, bullet point,
-color, and category attributes. tqdm reports indexing and dry-run progress.
-Use `--limit N` to index a subset or `--dry-run`
-to load the corpus and print the number of rows without writing to Turbopuffer.
-The region defaults to `TURBOPUFFER_REGION` or `gcp-us-central1`.
+The command uses `cheat_at_search.esci_data.corpus` and writes raw fields,
+analyzer-specific field copies, and Voyage 4 title/product embedding views.
+Searchable names use `logical_field__tokenizer__language__options`, such as
+`title__word_v4__es__stem_stop_fold` and `title__kuromoji__ja`. It includes
+`word_v4`, `word_v2`, whitespace, pre-tokenized, fuzzy, and BM25 length
+normalization variants. Native embedding writes are currently limited to 256
+documents per batch, which is also the indexing default.
+
+Use `--limit N` to index a subset or `--dry-run` to count documents without
+writing. `--drop-existing` explicitly deletes the target namespace before
+indexing, so use it with care. The region defaults to `TURBOPUFFER_REGION` or
+`gcp-us-central1`.
 
 ## Query the ESCI corpus
 

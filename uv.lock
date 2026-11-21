@@ -199,7 +199,7 @@ wheels = [
 [[package]]
 name = "cheat-at-search"
 version = "0.1.0"
-source = { git = "https://github.com/softwaredoug/cheat-at-search.git?rev=f1ff0cc06cc0ecd0feff2da7a1bf087daf3faede#f1ff0cc06cc0ecd0feff2da7a1bf087daf3faede" }
+source = { git = "https://github.com/softwaredoug/cheat-at-search.git?rev=b14065b7174f61acecec6117bf8bf64a4abfa5b8#b14065b7174f61acecec6117bf8bf64a4abfa5b8" }
 dependencies = [
     { name = "datasets" },
     { name = "huggingface-hub" },
@@ -1695,7 +1695,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "cheat-at-search", git = "https://github.com/softwaredoug/cheat-at-search.git?rev=f1ff0cc06cc0ecd0feff2da7a1bf087daf3faede" },
+    { name = "cheat-at-search", git = "https://github.com/softwaredoug/cheat-at-search.git?rev=b14065b7174f61acecec6117bf8bf64a4abfa5b8" },
     { name = "pandas", specifier = ">=2.2,<3" },
     { name = "tpuf-helpers", git = "https://github.com/softwaredoug/tpuf-helpers.git?rev=4723eadcc1b79b16e1b2f8c020651bc9a46b5a41" },
     { name = "tqdm", specifier = ">=4.70,<5" },

@@ -6,12 +6,12 @@ import itertools
 from collections.abc import Iterable
 from typing import Protocol
 
-from turbopuffer.types import AttributeSchemaParam, RowParam
+from turbopuffer.types import AttributeSchemaParam, DistanceMetric, RowParam
 
 from tpuf_optimize.strategy import TPufStrategy
 
 
-DEFAULT_BATCH_SIZE = 5000
+DEFAULT_BATCH_SIZE = 256
 
 
 class NamespaceWriter(Protocol):
@@ -22,6 +22,7 @@ class NamespaceWriter(Protocol):
         *,
         upsert_rows: Iterable[RowParam],
         schema: dict[str, AttributeSchemaParam],
+        distance_metric: DistanceMetric,
     ) -> object: ...
 
 
@@ -36,6 +37,11 @@ class Indexer:
     ) -> None:
         if batch_size < 1:
             raise ValueError("batch_size must be greater than zero")
+        if batch_size > strategy.MAX_BATCH_SIZE:
+            raise ValueError(
+                f"batch_size cannot exceed {strategy.MAX_BATCH_SIZE} when "
+                "using native embeddings"
+            )
         self.namespace = namespace
         self.strategy = strategy
         self.batch_size = batch_size
@@ -48,6 +54,7 @@ class Indexer:
             self.namespace.write(
                 upsert_rows=batch,
                 schema=self.strategy.schema,
+                distance_metric=self.strategy.distance_metric,
             )
             total += len(batch)
         return total

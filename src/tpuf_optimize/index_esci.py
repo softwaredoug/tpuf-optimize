@@ -22,6 +22,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--limit", type=int)
     parser.add_argument(
+        "--drop-existing",
+        action="store_true",
+        help="Delete the target namespace before indexing it.",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Load and count corpus documents without writing them.",
@@ -34,6 +39,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.batch_size < 1:
         parser.error("--batch-size must be greater than zero")
+    if args.batch_size > TPufStrategy.MAX_BATCH_SIZE:
+        parser.error(
+            f"--batch-size cannot exceed {TPufStrategy.MAX_BATCH_SIZE} "
+            "when using native embeddings"
+        )
     if args.limit is not None and args.limit < 1:
         parser.error("--limit must be greater than zero")
     if not args.dry_run and not os.environ.get("TURBOPUFFER_API_KEY"):
@@ -62,6 +72,13 @@ def main(argv: list[str] | None = None) -> int:
 
         with Turbopuffer(region=args.region) as client:
             namespace = client.namespace(args.namespace)
+            if args.drop_existing:
+                exists = any(
+                    item.id == args.namespace
+                    for item in client.namespaces(prefix=args.namespace)
+                )
+                if exists:
+                    namespace.delete_all()
             total = Indexer(namespace, strategy, args.batch_size).index(
                 tracked_documents()
             )
