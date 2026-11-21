@@ -79,7 +79,15 @@ def _parser() -> argparse.ArgumentParser:
         default=os.environ.get("TURBOPUFFER_REGION", "gcp-us-central1"),
     )
     parser.add_argument("--top-k", type=int, default=10)
-    parser.add_argument("--batch-size", type=int, default=100)
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=Searcher.MAX_QUERIES_PER_BATCH,
+        help=(
+            "Maximum number of queries per multi-query request "
+            f"(capped at {Searcher.MAX_QUERIES_PER_BATCH})."
+        ),
+    )
     return parser
 
 
