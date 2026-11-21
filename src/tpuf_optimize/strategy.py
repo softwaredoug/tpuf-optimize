@@ -20,6 +20,8 @@ class TPufStrategy:
     RRF_RANK_CONSTANT = 10
     RRF_CANDIDATE_DEPTH = 50
     FUSION_QUERY_COUNT = 4
+    # Ordered as title, description, product attributes, and passage vector.
+    FUSION_CHANNEL_WEIGHTS = (1.0, 0.5, 0.25, 2.0)
 
     EMBEDDING_MODEL = "voyage/voyage-4"
     EMBEDDING_DIMS = 1024

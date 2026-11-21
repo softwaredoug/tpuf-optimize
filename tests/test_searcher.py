@@ -56,8 +56,12 @@ class SearcherTests(unittest.TestCase):
         self.assertEqual(len(namespace.calls), 1)
         self.assertEqual(len(namespace.calls[0]), 8)
         fused_rows = results[0][1]
-        self.assertEqual([str(row.id) for row in fused_rows], ["a", "b", "c"])
-        self.assertAlmostEqual(fused_rows[0]["$dist"], 2 / 11 + 1 / 12)
+        self.assertEqual([str(row.id) for row in fused_rows], ["c", "a", "b"])
+        self.assertAlmostEqual(fused_rows[0]["$dist"], 2 / 11)
+        self.assertAlmostEqual(
+            fused_rows[1]["$dist"], 1 / 11 + 0.5 / 12 + 0.25 / 11
+        )
+        self.assertAlmostEqual(fused_rows[2]["$dist"], 1 / 12 + 0.5 / 11)
 
 
 if __name__ == "__main__":

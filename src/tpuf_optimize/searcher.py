@@ -78,13 +78,17 @@ class Searcher:
                 ]
                 rows_by_id: dict[str, Row] = {}
                 fused_scores: dict[str, float] = {}
-                for result in result_group:
+                for result, channel_weight in zip(
+                    result_group, self.strategy.FUSION_CHANNEL_WEIGHTS
+                ):
                     for rank, row in enumerate(result.rows or [], start=1):
                         document_id = str(row.id)
                         rows_by_id[document_id] = row
                         fused_scores[document_id] = fused_scores.get(
                             document_id, 0.0
-                        ) + 1 / (self.strategy.RRF_RANK_CONSTANT + rank)
+                        ) + channel_weight / (
+                            self.strategy.RRF_RANK_CONSTANT + rank
+                        )
                 ranked_ids = sorted(
                     fused_scores,
                     key=lambda document_id: (
