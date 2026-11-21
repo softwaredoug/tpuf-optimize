@@ -1,4 +1,10 @@
-# Paired search-agent evaluation (training split only)
+# Legacy single-backend search-agent evaluation
+
+This document describes the original single-agent evaluation, retained for
+historical reference. New backend comparisons should use
+[`agent_variants.md`](agent_variants.md), which fixes the model, supports
+concurrent independent query agents, and compares the naive BM25, Voyage-4 ANN,
+and accepted typed+computed backend on matched tasks.
 
 This protocol compares the existing `ProductSearch` direct/original-query path
 (using the frozen computed-feature ranker from `e64100d`) with the exact

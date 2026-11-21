@@ -183,27 +183,44 @@ uv run rank-computed-features \
   --output-dir /path/to/ablation
 ```
 
-## Product search agent experiment
+## Agent-backed retrieval experiments
 
-Install the branch's dependencies with `uv sync`, set `OPENAI_API_KEY` and
-`TURBOPUFFER_API_KEY`, and run:
+The `agent-main` branch is the integration base for comparing retrieval
+backends under one frozen OpenAI Agents policy. `search-agent` defaults to
+`gpt-6-luna` and the best typed+computed retriever; switch the backend with
+`--retriever`:
 
 ```sh
-uv run search-agent --locale us "Find blue running shoes for wide feet"
+uv sync
+uv run search-agent --retriever naive-bm25 --locale us "Find blue running shoes"
+uv run search-agent --retriever voyage4-ann --locale us "Find blue running shoes"
+uv run search-agent --retriever best-typed-computed --locale us "Find blue running shoes"
 ```
 
-The OpenAI Agents SDK requires an initial `search_products` tool call. The
-agent can make up to three searches total, stays in the requested ESCI
-locale, and is instructed to cite only products returned by the tool.
-Use `--model` to override the default `gpt-5-mini`.
+The three variants use the same agent prompt, locale guard, three-search
+budget, and product tool. Each tool response includes ID, title, description,
+and available brand/color/category attributes. The agent can use the
+description to decide whether to reformulate. Tool calls within one agent run
+are sequential; the evaluator runs independent query agents with configurable
+concurrency (default 8).
 
-The tool retrieves the top 100 Voyage-4 and top 100 BM25 candidates from
-`esci-products`, fetches computed features for their union, and returns the
-top 10 from the frozen computed-feature reranker (`e64100d`). On the paired
-1,000-query holdout that backend scored 0.41592 NDCG@10 versus 0.41094 for
-the previous reranker. This measures the backend, not the agent's reformulations.
-The catalog tool is read-only; the request and returned product summaries
-are sent to OpenAI, with SDK tracing disabled.
+To prepare three matched tasks from the assigned 1,000-query Referee training
+split and evaluate the variants:
+
+```sh
+export ALLOW_LIVE_SEARCH_AGENT_EVAL=1
+uv run search-agent-variants prepare
+uv run search-agent-variants run --variant naive-bm25 --allow-live
+uv run search-agent-variants run --variant voyage4-ann --allow-live
+uv run search-agent-variants run --variant best-typed-computed --allow-live
+uv run search-agent-variants compare
+```
+
+Add `--concurrency N` to each `run` to change the number of independent agent
+queries in flight. Tasks and checkpoints use only the assigned training token
+and remain in the private temporary directory. The separate 1,000-query
+holdout is never opened by these commands. No agent-variant metrics have been
+submitted or recorded yet.
 
 ## Typed/computed feature experiment
 

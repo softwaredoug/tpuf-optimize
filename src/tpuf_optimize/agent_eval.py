@@ -26,6 +26,8 @@ from openai import OpenAIError
 from turbopuffer import Turbopuffer
 
 from tpuf_optimize.search_agent import (
+    BEST_RETRIEVER,
+    DEFAULT_MODEL,
     MAX_SEARCHES,
     TOP_K,
     ProductSearch,
@@ -45,7 +47,7 @@ ARM_TASK_FILES = {
     "agent": PRIVATE_DIR / "agent.task.json",
 }
 TASK_QUERY_COUNT = 1000
-MODEL = "gpt-5-mini"
+MODEL = DEFAULT_MODEL
 CHECKPOINT_VERSION = 1
 BOOTSTRAP_SAMPLES = 10_000
 ID_LABEL_RE = re.compile(
@@ -350,7 +352,11 @@ def run_arm(
 
     failures_this_run: dict[str, int] = {}
     with Turbopuffer(region=region, max_retries=0) as client:
-        backend = ProductSearch(client.namespace(namespace_name), load_ranker())
+        backend = ProductSearch(
+            client.namespace(namespace_name),
+            BEST_RETRIEVER,
+            load_ranker(),
+        )
         for request in requests:
             if request.query_id in state["records"]:
                 continue
@@ -543,7 +549,7 @@ def compare_results(
         "queries": len(query_ids),
         "direct_policy": "ProductSearch/e64100d, original query, frozen ranker",
         "agent_policy": (
-            "77fc0d3 OpenAI Agents SDK free-text policy, gpt-5-mini, "
+            f"77fc0d3 OpenAI Agents SDK free-text policy, {MODEL}, "
             "strict labeled-ID extraction; no prompt/model changes"
         ),
         "direct_ndcg10": direct_mean,

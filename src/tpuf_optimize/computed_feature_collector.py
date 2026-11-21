@@ -92,7 +92,7 @@ class ComputedFeatureQueryStrategy(TPufStrategy):
                 "rank_by": rank_by,
                 "filters": ("locale", "Eq", normalized_locale),
                 "top_k": top_k,
-                "include_attributes": ["title", "brand"],
+                "include_attributes": ["title", "description", "brand", "color", "category"],
                 "compute_attributes": {
                     **self.computed_attributes(query_text, normalized_locale),
                     # BM25 operators expose scores, not a boolean coverage op.
@@ -144,7 +144,10 @@ def _candidate_list(rows: list[Row], query_text: str) -> list[dict[str, object]]
             "doc_id": key,
             "score": score,
             "title": title,
+            "description": values.get("description"),
             "brand": values.get("brand"),
+            "color": values.get("color"),
+            "category": values.get("category"),
             "features": features,
         }
         candidates.append(candidate)
@@ -334,7 +337,7 @@ def _query_id_filtered_union(
             ),
             "rank_by": ("id", "asc"),
             "top_k": len(candidate_ids),
-            "include_attributes": ["title", "brand"],
+            "include_attributes": ["title", "description", "brand", "color"],
             "compute_attributes": strategy.computed_attributes(query_text, locale),
         },
     )
