@@ -23,6 +23,7 @@ from tpuf_optimize.query_batch import _ranked_rows
 from tpuf_optimize.searcher import SearchRequest
 
 COUNT = 5000
+VOYAGE4_EMBED_USD_PER_MILLION = 0.06
 ALIASES = {"en-us": "us", "es-es": "es", "ja-jp": "jp"}
 
 
@@ -150,6 +151,14 @@ def run(args, state):
     expected = signature(task)
     if len(expected) != COUNT or len(task["queries"]) != COUNT:
         raise ValueError("Expected 5,000 distinct Referee query IDs")
+    query_text_bytes = sum(
+        len(text.encode("utf-8")) for text, _locale in expected.values()
+    )
+    voyage4_query_token_proxy = query_text_bytes / 4
+    voyage4_embed_usd_per_query = (
+        voyage4_query_token_proxy / COUNT
+        * VOYAGE4_EMBED_USD_PER_MILLION / 1_000_000
+    )
     overlap_file = state / "overlap.json"
     if not overlap_file.exists():
         known, artifacts = seen_queries(state.parent)
@@ -182,6 +191,32 @@ def run(args, state):
     summary = (
         json.loads(aggregate.read_text()) if aggregate.exists() else {**cohort, "variants": {}}
     )
+    cost_estimates = {
+        "currency": "USD",
+        "unit": "per user query",
+        "method": "Voyage-4 native embedding; UTF-8 query bytes / 4 token proxy",
+        "query_text_bytes": query_text_bytes,
+        "voyage4_query_tokens_proxy": voyage4_query_token_proxy,
+        "voyage4_embedding_usd_per_million_tokens": (
+            VOYAGE4_EMBED_USD_PER_MILLION
+        ),
+        "voyage4_embedding_usd_per_query": voyage4_embed_usd_per_query,
+        "voyage4_embedding_usd_total": voyage4_embed_usd_per_query * COUNT,
+        "variant_cost_per_query_usd": {
+            variant.slug: (
+                voyage4_embed_usd_per_query
+                if variant.uses_voyage4_query_embedding else 0.0
+            )
+            for variant in VARIANTS
+        },
+        "excludes": [
+            "Turbopuffer database/storage/query charges",
+            "local CPU reranker costs",
+        ],
+    }
+    if "cost_estimates" in summary and summary["cost_estimates"] != cost_estimates:
+        raise ValueError("Benchmark cost-estimate basis changed")
+    summary["cost_estimates"] = cost_estimates
     if any(summary[field] != value for field, value in cohort.items()):
         raise ValueError("Benchmark configuration changed")
     revisions = {
@@ -207,6 +242,15 @@ def run(args, state):
                     sys.executable, str(Path(__file__).with_name("render_esci_benchmark.py")),
                     "--aggregate", str(args.publish),
                 ], check=True)
+    save(aggregate, summary)
+    if args.publish:
+        # Aggregate-only output; the private split task and query data stay local.
+        save(args.publish, summary)
+        if args.render:
+            subprocess.run([
+                sys.executable, str(Path(__file__).with_name("render_esci_benchmark.py")),
+                "--aggregate", str(args.publish),
+            ], check=True)
 
 
 def run_variant(
