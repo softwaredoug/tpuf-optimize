@@ -10,11 +10,17 @@ dependencies = [
     "turbopuffer>=2.10.2",
     "tpuf-helpers @ git+https://github.com/softwaredoug/tpuf-helpers.git@4723eadcc1b79b16e1b2f8c020651bc9a46b5a41",
     "cheat_at_search @ git+https://github.com/softwaredoug/cheat-at-search.git@b14065b7174f61acecec6117bf8bf64a4abfa5b8",
+    "openai-agents>=0.20.0",
 ]
 
 [project.scripts]
 index-esci = "tpuf_optimize.index_esci:main"
 query = "tpuf_optimize.query_batch:main"
+search-agent = "tpuf_optimize.search_agent:main"
+search-agent-eval = "tpuf_optimize.agent_eval:main"
+collect-computed-candidates = "tpuf_optimize.computed_feature_collector:main"
+rank-computed-features = "tpuf_optimize.computed_feature_rank:ablation_main"
+collect-training-judgments = "tpuf_optimize.training_judgments:main"
 
 [dependency-groups]
 dev = [

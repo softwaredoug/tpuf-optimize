@@ -112,3 +112,95 @@ Scored variants used the same 5,000 Referee queries. The second NDCG column cove
 
 Refresh the table and both Pareto charts from the aggregate-only JSON with
 `uv run python scripts/render_esci_benchmark.py`.
+
+## Computed-feature candidate experiment
+
+`collect-computed-candidates` is a separate, opt-in collection mode based on the
+pinned training collector. For each training query it issues exactly two
+top-100 requests: the existing `passage__embed__voyage_4` ANN query and the
+existing weighted locale-specific title/description BM25 query, both filtered
+by locale. Each arm adds `title_bm25`, `passage_bm25`, and `brand_bm25` through
+`compute_attributes`; these response-only expressions do not affect matching
+or ranking. Binary full-query title coverage is computed from the returned
+title, because the compute-attributes expression set does not provide a
+conditional/boolean token-coverage operator. No second embedding, vector
+distance, or reranking model is requested. Missing/unsupported BM25 values are
+recorded as `null`, while numeric zero remains `0.0`; the offline ranker adds
+availability indicators so missing values are not silently treated as zero.
+
+The paired smoke test verified that an ID-filtered request on the pinned cached
+candidate union returns exactly the same IDs and leaves the cached dense/lexical
+ranks and raw scores untouched. Prefer this lower-cost mode when that cache is
+available: one serial request per query, `rank_by=("id", "asc")`, filtered by
+locale and the cached candidate IDs. Its `compute_attributes` are the same
+BM25 features as the paired-arm path; coverage is derived from the returned
+title. SDK retries/telemetry are disabled; explicit bounded 429 backoff and a
+per-query checkpoint are used. For 1,000 queries this costs 1,000 successful
+feature requests (each returning at most 200 candidate rows), with no Voyage
+embedding calls. The resumable command is:
+
+```sh
+uv run collect-computed-candidates \
+  --source-candidates /path/to/esci_research_training_candidates.jsonl
+```
+
+Without `--source-candidates`, the command uses the original two-arm collector
+and costs two top-100 requests per query.
+
+With an enriched cache and matching training grades, compare the frozen
+`adf9768` model, a same-fold base-feature refit, and an enriched-feature refit:
+
+```sh
+uv run rank-computed-features \
+  --candidates /path/to/computed_candidates.jsonl \
+  --grades /path/to/training_grades.jsonl \
+  --output-dir /path/to/ablation
+```
+
+All three rankers use the same deterministic query-disjoint train/validation
+fold and identical candidate lists. The experiment writes validation CSVs,
+weight artifacts, and an aggregate report; labels never enter feature
+extraction or ranking.
+
+The training-only 750/250 split (seed 17) evaluated all 250 validation queries
+on identical cached candidate lists. NDCG@10 was `0.422458` for both frozen
+`adf9768` and the same-fold base-feature refit, and `0.428803` for the
+computed-feature refit (2:1 RRF: `0.395673`). The frozen computed-feature
+weights are packaged with `tpuf_optimize` for the search agent below.
+
+To obtain labels only for the assigned training split, the debug collector
+submits candidate IDs to Referee's read-only `/debug` endpoint in serial
+10-query batches, using the configured training-only task and bearer token.
+It checkpoints each batch and writes grade/target JSONL under the approved
+temporary output prefix; it never completes a task:
+
+```sh
+uv run collect-training-judgments
+uv run rank-computed-features \
+  --candidates /path/to/esci_research_training_idfiltered_candidates.jsonl \
+  --grades /path/to/esci_research_training_idfiltered_grades.jsonl \
+  --targets /path/to/esci_research_training_idfiltered_targets.jsonl \
+  --output-dir /path/to/ablation
+```
+
+## Product search agent experiment
+
+Install the branch's dependencies with `uv sync`, set `OPENAI_API_KEY` and
+`TURBOPUFFER_API_KEY`, and run:
+
+```sh
+uv run search-agent --locale us "Find blue running shoes for wide feet"
+```
+
+The OpenAI Agents SDK requires an initial `search_products` tool call. The
+agent can make up to three searches total, stays in the requested ESCI
+locale, and is instructed to cite only products returned by the tool.
+Use `--model` to override the default `gpt-5-mini`.
+
+The tool retrieves the top 100 Voyage-4 and top 100 BM25 candidates from
+`esci-products`, fetches computed features for their union, and returns the
+top 10 from the frozen computed-feature reranker (`e64100d`). On the paired
+1,000-query holdout that backend scored 0.41592 NDCG@10 versus 0.41094 for
+the previous reranker. This measures the backend, not the agent's reformulations.
+The catalog tool is read-only; the request and returned product summaries
+are sent to OpenAI, with SDK tracing disabled.
