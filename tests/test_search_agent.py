@@ -27,7 +27,16 @@ class ProductSearchTests(unittest.TestCase):
         })
         ns = Mock()
         ns.multi_query.return_value = SimpleNamespace(
-            results=[SimpleNamespace(rows=[row]), SimpleNamespace(rows=[row])]
+            results=[
+                SimpleNamespace(
+                    rows=[row],
+                    performance=SimpleNamespace(embedding_tokens=5, embedding_ms=2),
+                ),
+                SimpleNamespace(
+                    rows=[row],
+                    performance=SimpleNamespace(embedding_tokens=0, embedding_ms=0),
+                ),
+            ]
         )
         collect.return_value = (
             {"shoe": {
@@ -57,7 +66,16 @@ class ProductSearchTests(unittest.TestCase):
     def test_empty_results_skip_feature_request(self, collect) -> None:
         ns = Mock()
         ns.multi_query.return_value = SimpleNamespace(
-            results=[SimpleNamespace(rows=[]), SimpleNamespace(rows=None)]
+            results=[
+                SimpleNamespace(
+                    rows=[],
+                    performance=SimpleNamespace(embedding_tokens=1, embedding_ms=1),
+                ),
+                SimpleNamespace(
+                    rows=None,
+                    performance=SimpleNamespace(embedding_tokens=0, embedding_ms=0),
+                ),
+            ]
         )
         self.assertEqual(
             ProductSearch(ns, "best-typed-computed", load_ranker()).search(
@@ -79,10 +97,27 @@ class ProductSearchTests(unittest.TestCase):
             with self.subTest(variant=variant):
                 ns = Mock()
                 ns.multi_query.return_value = SimpleNamespace(
-                    results=[SimpleNamespace(rows=[row])]
+                    results=[SimpleNamespace(
+                        rows=[row],
+                        performance=SimpleNamespace(
+                            embedding_tokens=3 if variant == "voyage4-ann" else 0,
+                            embedding_ms=2 if variant == "voyage4-ann" else 0,
+                        ),
+                        billing=SimpleNamespace(
+                            billable_logical_bytes_queried=100,
+                            billable_logical_bytes_returned=200,
+                        ),
+                    )]
                 )
-                result = ProductSearch(ns, variant).search("blue shoe", "en-US")
+                result, usage = ProductSearch(ns, variant).search_with_usage(
+                    "blue shoe", "en-US"
+                )
                 self.assertEqual(result[0]["description"], "Lightweight trail shoe")
+                self.assertEqual(usage["turbopuffer_requests"], 1)
+                self.assertEqual(
+                    usage["embedding_tokens"],
+                    3 if variant == "voyage4-ann" else 0,
+                )
                 [query] = ns.multi_query.call_args.kwargs["queries"]
                 if ranker == "ANN":
                     self.assertEqual(query["rank_by"][1], "ANN")

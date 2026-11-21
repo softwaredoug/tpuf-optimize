@@ -78,6 +78,110 @@ class ProductRecommendations(BaseModel):
     )
 
 
+@dataclass
+class RetrievalUsage:
+    """Usage counters returned by Turbopuffer query responses."""
+
+    requests: int = 0
+    embedding_usage_responses: int = 0
+    embedding_tokens: int = 0
+    embedding_ms: int = 0
+    billable_bytes_queried: int = 0
+    billable_bytes_returned: int = 0
+
+    @staticmethod
+    def _field(value: object, key: str) -> object:
+        if isinstance(value, Mapping):
+            return value.get(key)
+        return getattr(value, key, None)
+
+    def record(self, response: object) -> None:
+        self.requests += 1
+        subresults = getattr(response, "results", None)
+        items = list(subresults) if subresults is not None else [response]
+        before = (
+            self.embedding_tokens,
+            self.embedding_ms,
+            self.billable_bytes_queried,
+            self.billable_bytes_returned,
+        )
+        for item in items:
+            performance = self._field(item, "performance")
+            billing = self._field(item, "billing")
+            metrics = (
+                (performance, "embedding_tokens", "embedding_tokens"),
+                (performance, "embedding_ms", "embedding_ms"),
+                (billing, "billable_logical_bytes_queried", "billable_bytes_queried"),
+                (
+                    billing,
+                    "billable_logical_bytes_returned",
+                    "billable_bytes_returned",
+                ),
+            )
+            for source, field, target in metrics:
+                value = self._field(source, field) if source is not None else None
+                if isinstance(value, int) and not isinstance(value, bool):
+                    setattr(self, target, getattr(self, target) + value)
+                    if field == "embedding_tokens":
+                        self.embedding_usage_responses += 1
+        after = (
+            self.embedding_tokens,
+            self.embedding_ms,
+            self.billable_bytes_queried,
+            self.billable_bytes_returned,
+        )
+        if subresults is not None and after == before:
+            performance = self._field(response, "performance")
+            billing = self._field(response, "billing")
+            for source, field, target in (
+                (performance, "embedding_tokens", "embedding_tokens"),
+                (performance, "embedding_ms", "embedding_ms"),
+                (
+                    billing,
+                    "billable_logical_bytes_queried",
+                    "billable_bytes_queried",
+                ),
+                (
+                    billing,
+                    "billable_logical_bytes_returned",
+                    "billable_bytes_returned",
+                ),
+            ):
+                value = self._field(source, field) if source is not None else None
+                if isinstance(value, int) and not isinstance(value, bool):
+                    setattr(self, target, getattr(self, target) + value)
+                    if field == "embedding_tokens":
+                        self.embedding_usage_responses += 1
+
+    def to_dict(self) -> dict[str, int]:
+        return {
+            "turbopuffer_requests": self.requests,
+            "embedding_usage_responses": self.embedding_usage_responses,
+            "embedding_tokens": self.embedding_tokens,
+            "embedding_ms": self.embedding_ms,
+            "billable_bytes_queried": self.billable_bytes_queried,
+            "billable_bytes_returned": self.billable_bytes_returned,
+        }
+
+
+class _MeasuredNamespace:
+    """Delegate namespace calls while accumulating server-returned usage."""
+
+    def __init__(self, namespace: NamespaceSearcher, usage: RetrievalUsage) -> None:
+        self.namespace = namespace
+        self.usage = usage
+
+    def multi_query(self, *, queries):
+        response = self.namespace.multi_query(queries=queries)
+        self.usage.record(response)
+        return response
+
+    def query(self, **query):
+        response = self.namespace.query(**query)  # type: ignore[attr-defined]
+        self.usage.record(response)
+        return response
+
+
 def extract_ranked_product_ids(
     output: object, returned_ids: set[str]
 ) -> tuple[list[str], int, bool, bool]:
@@ -120,28 +224,41 @@ class ProductSearch:
             self.model = load_ranker()
 
     def search(self, query: str, locale: str) -> list[dict[str, object]]:
+        products, _usage = self.search_with_usage(query, locale)
+        return products
+
+    def search_with_usage(
+        self, query: str, locale: str
+    ) -> tuple[list[dict[str, object]], dict[str, int]]:
         query = query.strip()
         if not query or len(query) > MAX_QUERY_LENGTH:
             raise ValueError("Query must contain 1–512 characters.")
         if locale not in LOCALES:
             raise ValueError("Unsupported ESCI locale.")
         locale = CandidateQueryStrategy.normalize_locale(locale)
+        usage = RetrievalUsage()
+        namespace = _MeasuredNamespace(self.namespace, usage)
         if self.retriever in {"naive-bm25", "voyage4-ann"}:
             mode = "lexical" if self.retriever == "naive-bm25" else "dense"
             strategy = CandidateQueryStrategy(mode)
-            searcher = Searcher(self.namespace, strategy, batch_size=1)
+            searcher = Searcher(namespace, strategy, batch_size=1)
             [(_request, rows)] = list(
                 searcher.search(
                     [SearchRequest("interactive", query, locale)],
                     top_k=TOOL_CANDIDATE_K,
                 )
             )
-            return [_product_from_row(row) for row in rows]
+            if (
+                self.retriever == "voyage4-ann"
+                and usage.embedding_usage_responses == 0
+            ):
+                raise RuntimeError("Turbopuffer did not return Voyage-4 token usage.")
+            return [_product_from_row(row) for row in rows], usage.to_dict()
 
         if self.model is None:
             raise RuntimeError("The best typed+computed retriever requires its model.")
         strategy = ComputedFeatureQueryStrategy("dense")
-        searcher = Searcher(self.namespace, strategy, batch_size=1)
+        searcher = Searcher(namespace, strategy, batch_size=1)
         requests = [
             strategy.query(query, locale, HYBRID_DEPTH),
             ComputedFeatureQueryStrategy("lexical").query(
@@ -149,6 +266,8 @@ class ProductSearch:
             ),
         ]
         dense, lexical = searcher._query_batch(requests)
+        if usage.embedding_usage_responses == 0:
+            raise RuntimeError("Turbopuffer did not return Voyage-4 token usage.")
         record: dict[str, Any] = {
             "query_id": "interactive",
             "query_text": query,
@@ -157,8 +276,8 @@ class ProductSearch:
             "lexical": computed_candidate_list(lexical, query),
         }
         if not dense and not lexical:
-            return []
-        features, _, _, _ = _query_id_filtered_union(self.namespace, record)
+            return [], usage.to_dict()
+        features, _, _, _ = _query_id_filtered_union(namespace, record)
         catalog = {}
         for arm in ("dense", "lexical"):
             for candidate in record[arm]:
@@ -167,10 +286,11 @@ class ProductSearch:
                 catalog.setdefault(ident, candidate)
 
         group = parse_query_record(record)
-        return [
+        products = [
             _product_from_ranked_candidate(candidate, catalog[candidate.doc_id])
             for candidate, _ in model_ranking(group, self.model)[:TOOL_CANDIDATE_K]
         ]
+        return products, usage.to_dict()
 
 
 def _product_from_row(row: Row) -> dict[str, object]:

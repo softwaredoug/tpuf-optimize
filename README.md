@@ -221,8 +221,9 @@ queries in flight. Tasks and checkpoints use only the assigned training token
 and remain in the private temporary directory. The separate 1,000-query
 holdout is never opened by these commands. The initial free-text parsing
 attempt produced invalid near-empty rankings and is excluded. A structured
-ranked-results rerun (each item carries `doc_id`) is pending on fresh tasks from
-the same training split.
+`doc_id` run produced BM25 and Voyage-4 scores, but preceded token-usage
+instrumentation; the typed+computed arm was incomplete. A fresh, token-accounted
+run is pending on new tasks from the same training split.
 
 ## Typed/computed feature experiment
 

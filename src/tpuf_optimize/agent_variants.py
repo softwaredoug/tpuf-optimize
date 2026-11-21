@@ -46,7 +46,12 @@ TASK_QUERY_COUNT = 1000
 DEFAULT_CONCURRENCY = 8
 MAX_CONCURRENCY = 32
 STATE_VERSION = 1
-OUTPUT_SCHEMA = "ranked-search-results-v3"
+OUTPUT_SCHEMA = "ranked-search-results-v4-token-usage"
+OPENAI_INPUT_USD_PER_MILLION = 0.10
+OPENAI_OUTPUT_USD_PER_MILLION = 0.50
+OPENAI_CACHE_READ_USD_PER_MILLION = 0.01
+OPENAI_CACHE_WRITE_USD_PER_MILLION = 0.125
+VOYAGE4_EMBED_USD_PER_MILLION = 0.06
 
 
 def _task_signature(task: object) -> list[tuple[str, str, str]]:
@@ -118,12 +123,21 @@ class _ObservedSearch:
         self.backend_seconds = 0.0
         self.failures = 0
         self.returned_ids: set[str] = set()
+        self.retrieval_usage = {
+            "turbopuffer_requests": 0,
+            "embedding_tokens": 0,
+            "embedding_ms": 0,
+            "billable_bytes_queried": 0,
+            "billable_bytes_returned": 0,
+        }
 
     def search(self, query: str, locale: str) -> list[dict[str, object]]:
         self.tool_calls += 1
         started = time.perf_counter()
         try:
-            products = self.backend.search(query, locale)
+            products, usage = self.backend.search_with_usage(query, locale)
+            for key in self.retrieval_usage:
+                self.retrieval_usage[key] += int(usage.get(key, 0))
             for product in products:
                 doc_id = product.get("doc_id")
                 if doc_id is None:
@@ -135,6 +149,56 @@ class _ObservedSearch:
             raise
         finally:
             self.backend_seconds += time.perf_counter() - started
+
+
+def _model_usage(result: object) -> dict[str, int | float]:
+    """Aggregate OpenAI usage from every model response in one agent run."""
+    input_tokens = 0
+    output_tokens = 0
+    reasoning_tokens = 0
+    cached_input_tokens = 0
+    cache_write_tokens = 0
+    responses = list(getattr(result, "raw_responses", []))
+    usage_responses = 0
+    for response in responses:
+        usage = getattr(response, "usage", None)
+        if usage is None:
+            continue
+        usage_responses += 1
+        input_tokens += int(getattr(usage, "input_tokens", 0) or 0)
+        output_tokens += int(getattr(usage, "output_tokens", 0) or 0)
+        input_details = getattr(usage, "input_tokens_details", None)
+        output_details = getattr(usage, "output_tokens_details", None)
+        cached_input_tokens += int(
+            getattr(input_details, "cached_tokens", 0) or 0
+        )
+        cache_write_tokens += int(
+            getattr(input_details, "cache_write_tokens", 0) or 0
+        )
+        reasoning_tokens += int(
+            getattr(output_details, "reasoning_tokens", 0) or 0
+        )
+    uncached_input_tokens = max(
+        0, input_tokens - cached_input_tokens - cache_write_tokens
+    )
+    openai_cost = (
+        uncached_input_tokens * OPENAI_INPUT_USD_PER_MILLION
+        + cached_input_tokens * OPENAI_CACHE_READ_USD_PER_MILLION
+        + cache_write_tokens * OPENAI_CACHE_WRITE_USD_PER_MILLION
+        + output_tokens * OPENAI_OUTPUT_USD_PER_MILLION
+    ) / 1_000_000
+    return {
+        "model_requests": len(responses),
+        "usage_responses": usage_responses,
+        "usage_missing_responses": len(responses) - usage_responses,
+        "input_tokens": input_tokens,
+        "reasoning_tokens": reasoning_tokens,
+        "output_tokens": output_tokens,
+        "visible_output_tokens": max(0, output_tokens - reasoning_tokens),
+        "cached_input_tokens": cached_input_tokens,
+        "cache_write_tokens": cache_write_tokens,
+        "openai_cost_usd": openai_cost,
+    }
 
 
 async def _query_agent(
@@ -157,6 +221,10 @@ async def _query_agent(
     ids, invalid, missing, malformed = extract_ranked_product_ids(
         result.final_output, observed.returned_ids
     )
+    model_usage = _model_usage(result)
+    if model_usage["usage_missing_responses"] != 0:
+        raise RuntimeError("OpenAI response omitted token usage; cost would be incomplete.")
+    embedding_tokens = observed.retrieval_usage["embedding_tokens"]
     return {
         "doc_ids": ids[:10],
         "end_to_end_seconds": elapsed,
@@ -165,6 +233,15 @@ async def _query_agent(
         "invalid_id_count": invalid,
         "missing_id_queries": int(missing),
         "format_failure_queries": int(malformed),
+        **model_usage,
+        **observed.retrieval_usage,
+        "voyage4_embedding_cost_usd": (
+            embedding_tokens * VOYAGE4_EMBED_USD_PER_MILLION / 1_000_000
+        ),
+        "estimated_inference_cost_usd": (
+            float(model_usage["openai_cost_usd"])
+            + embedding_tokens * VOYAGE4_EMBED_USD_PER_MILLION / 1_000_000
+        ),
     }
 
 
@@ -383,6 +460,46 @@ def summarize(concurrency: int) -> dict[str, Any]:
             "p50_backend_ms": _percentile(backend, 0.50),
             "p95_backend_ms": _percentile(backend, 0.95),
             "tool_calls": sum(int(row["tool_calls"]) for row in records.values()),
+            "model_requests": sum(int(row["model_requests"]) for row in records.values()),
+            "input_tokens": sum(int(row["input_tokens"]) for row in records.values()),
+            "reasoning_tokens": sum(int(row["reasoning_tokens"]) for row in records.values()),
+            "output_tokens": sum(int(row["output_tokens"]) for row in records.values()),
+            "visible_output_tokens": sum(
+                int(row["visible_output_tokens"]) for row in records.values()
+            ),
+            "cached_input_tokens": sum(
+                int(row["cached_input_tokens"]) for row in records.values()
+            ),
+            "cache_write_tokens": sum(
+                int(row["cache_write_tokens"]) for row in records.values()
+            ),
+            "openai_cost_usd": sum(
+                float(row["openai_cost_usd"]) for row in records.values()
+            ),
+            "voyage4_embedding_tokens": sum(
+                int(row["embedding_tokens"]) for row in records.values()
+            ),
+            "voyage4_embedding_cost_usd": sum(
+                float(row["voyage4_embedding_cost_usd"])
+                for row in records.values()
+            ),
+            "estimated_model_inference_cost_usd": sum(
+                float(row["estimated_inference_cost_usd"])
+                for row in records.values()
+            ),
+            "cost_per_query_usd": statistics.mean(
+                float(row["estimated_inference_cost_usd"])
+                for row in records.values()
+            ),
+            "turbopuffer_requests": sum(
+                int(row["turbopuffer_requests"]) for row in records.values()
+            ),
+            "billable_bytes_queried": sum(
+                int(row["billable_bytes_queried"]) for row in records.values()
+            ),
+            "billable_bytes_returned": sum(
+                int(row["billable_bytes_returned"]) for row in records.values()
+            ),
             "invalid_ids": sum(int(row["invalid_id_count"]) for row in records.values()),
             "missing_id_queries": sum(int(row["missing_id_queries"]) for row in records.values()),
             "format_failures": sum(int(row["format_failure_queries"]) for row in records.values()),

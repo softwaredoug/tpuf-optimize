@@ -43,19 +43,31 @@ uv run search-agent-variants run --variant best-typed-computed --concurrency 8 -
 uv run search-agent-variants compare --concurrency 8
 ```
 
-Each completed query is checkpointed privately with only IDs, scores, timing,
-tool-call counts, and failure/format counts. A failed query is not turned into a
-no-hit result; Referee submission waits until the checkpoint covers the entire
-task. The three completed rankings are submitted to Referee separately, each
-against its matched training task. The comparison reports NDCG@10, paired
-agent-variant deltas, end-to-end and backend p50/p95 latency, tool calls,
-invalid IDs, missing IDs, and formatting failures. It is a training result,
-not a holdout result.
+Each completed query is checkpointed privately with IDs, scores, timing,
+tool-call counts, token usage, server embedding metrics, billable logical
+bytes, and failure/format counts. A failed query is not turned into a no-hit
+result; Referee submission waits until the checkpoint covers the entire task.
+The three completed rankings are submitted to Referee separately, each against
+its matched training task. The comparison reports NDCG@10, paired agent-variant
+deltas, end-to-end and backend p50/p95 latency, tool calls, input/reasoning/
+output tokens, token-based OpenAI cost, Voyage-4 embedding token cost, and
+Turbopuffer billable bytes. Database bytes are reported separately and are not
+converted to dollars. It is a training result, not a holdout result.
+
+OpenAI token counts are read from every Agents SDK model response, including
+reasoning tokens and cache details. The cost estimate applies the current model
+catalog rates: $0.10/M uncached input, $0.01/M cached input, $0.125/M cache
+writes, and $0.50/M output (reasoning is included in output billing). Voyage-4
+embedding cost is calculated from Turbopuffer's returned `embedding_tokens` at
+$0.06/M. This is a usage-based estimate, not a billing-invoice amount. The
+runner also records Turbopuffer billable logical bytes so database charges can
+be estimated separately.
 
 `OPENAI_API_KEY` is used by the Agents SDK and `TURBOPUFFER_API_KEY` by the
 retrieval tool. Neither key is accepted as an argument or written to outputs.
 The query and retrieved product data are sent to OpenAI; traces are disabled.
 
-Previous free-text parser results are not included in this protocol. Structured
-`doc_id` result runs use fresh Referee tasks on the same training split; tasks
-completed under the prior output format are not reused.
+Previous free-text parser results and runs without token telemetry are not
+included in this protocol. The token-accounted run uses fresh Referee tasks on
+the same training split; tasks completed under prior output formats are not
+reused.
