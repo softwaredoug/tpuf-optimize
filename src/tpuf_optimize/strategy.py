@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import re
 import unicodedata
 from collections.abc import Iterator
 from typing import Any, cast
@@ -16,7 +17,8 @@ class TPufStrategy:
     """Own the fields, analyzers, embeddings, and queries under experimentation."""
 
     TITLE_WEIGHT = 2.0
-    DESCRIPTION_WEIGHT = 1.0
+    FUZZY_TITLE_WEIGHT = 0.35
+    FUZZY_BRAND_WEIGHT = 0.15
 
     EMBEDDING_MODEL = "voyage/voyage-4"
     EMBEDDING_DIMS = 1024
@@ -126,6 +128,7 @@ class TPufStrategy:
         ),
     }
     PRETOKENIZED_FIELDS = ("title", "brand", "passage")
+    FUZZY_QUERY_MIN_CHARS = 6
 
     EMBEDDING_FIELDS = {
         "passage__embed__voyage_4": ("embedding__voyage_4__passage", "passage"),
@@ -288,28 +291,60 @@ class TPufStrategy:
             emitted += 1
 
     def rank_by(self, query_text: str, locale: str) -> RankBy:
-        """Build the locale-appropriate weighted title/description BM25 query."""
+        """Rank the combined passage, boosting title and typo-tolerant matches."""
         locale_analyzer = self.LOCALE_ANALYZERS.get(locale)
         suffix = (
             locale_analyzer[0]
             if locale_analyzer is not None
             else self.DEFAULT_ANALYZER
         )
-        return (
-            "Sum",
+        clauses: list[Any] = [
+            (f"passage__{suffix}", "BM25", query_text),
             (
-                (
-                    "Product",
-                    self.TITLE_WEIGHT,
-                    (f"title__{suffix}", "BM25", query_text),
-                ),
-                (
-                    "Product",
-                    self.DESCRIPTION_WEIGHT,
-                    (f"description__{suffix}", "BM25", query_text),
-                ),
+                "Product",
+                self.TITLE_WEIGHT,
+                (f"title__{suffix}", "BM25", query_text),
             ),
-        )
+        ]
+
+        # Fuzzy filters return a binary score. Apply a small boost for long terms
+        # to recover likely typos without replacing the more discriminative BM25.
+        if locale != "jp":
+            fuzzy_options = {
+                "max_edit_distance": [
+                    {"min_query_chars": self.FUZZY_QUERY_MIN_CHARS, "distance": 1}
+                ],
+                "case_sensitive": False,
+            }
+            for token in re.findall(r"[^\W_]+", query_text, flags=re.UNICODE):
+                if len(token) < self.FUZZY_QUERY_MIN_CHARS:
+                    continue
+                clauses.extend(
+                    (
+                        (
+                            "Product",
+                            self.FUZZY_TITLE_WEIGHT,
+                            (
+                                "title__word_v4__fuzzy",
+                                "Fuzzy",
+                                token,
+                                fuzzy_options,
+                            ),
+                        ),
+                        (
+                            "Product",
+                            self.FUZZY_BRAND_WEIGHT,
+                            (
+                                "brand__word_v4__fuzzy",
+                                "Fuzzy",
+                                token,
+                                fuzzy_options,
+                            ),
+                        ),
+                    )
+                )
+
+        return cast(RankBy, ("Sum", tuple(clauses)))
 
     def query(self, query_text: str, locale: str, top_k: int) -> Query:
         """Build one locale-filtered query for Turbopuffer's multi-query API."""

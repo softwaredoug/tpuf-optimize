@@ -119,9 +119,25 @@ class TPufStrategyTests(unittest.TestCase):
         es_query = self.strategy.query("zapato azul", "es", top_k=10)
         jp_query = self.strategy.query("青い靴", "jp", top_k=10)
 
+        self.assertIn("passage__word_v4__en__stem_stop", str(us_query["rank_by"]))
         self.assertIn("title__word_v4__en__stem_stop", str(us_query["rank_by"]))
+        self.assertIn("passage__word_v4__es__stem_stop_fold", str(es_query["rank_by"]))
         self.assertIn("title__word_v4__es__stem_stop_fold", str(es_query["rank_by"]))
+        self.assertIn("passage__kuromoji__ja", str(jp_query["rank_by"]))
         self.assertIn("title__kuromoji__ja", str(jp_query["rank_by"]))
+
+    def test_rank_by_adds_fuzzy_boosts_for_long_latin_terms(self) -> None:
+        rank_by = str(self.strategy.rank_by("blue running shoe", "us"))
+
+        self.assertIn("title__word_v4__fuzzy", rank_by)
+        self.assertIn("brand__word_v4__fuzzy", rank_by)
+        self.assertIn("min_query_chars", rank_by)
+
+    def test_rank_by_skips_fuzzy_boosts_for_japanese(self) -> None:
+        rank_by = str(self.strategy.rank_by("軽いランニング", "jp"))
+
+        self.assertIn("passage__kuromoji__ja", rank_by)
+        self.assertNotIn("__fuzzy", rank_by)
 
     def test_pretokenizer_handles_latin_and_japanese(self) -> None:
         self.assertEqual(
