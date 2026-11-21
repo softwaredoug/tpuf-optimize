@@ -21,10 +21,17 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--limit", type=int)
-    parser.add_argument(
+    namespace_action = parser.add_mutually_exclusive_group()
+    namespace_action.add_argument(
         "--drop-existing",
         action="store_true",
         help="Delete the target namespace before indexing it.",
+    )
+    namespace_action.add_argument(
+        "--skip-existing-docs",
+        action="store_true",
+        help="Check each batch for existing document IDs and skip those rows. "
+        "Use only when resuming with the same schema.",
     )
     parser.add_argument(
         "--dry-run",
@@ -79,11 +86,16 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 if exists:
                     namespace.delete_all()
-            total = Indexer(namespace, strategy, args.batch_size).index(
-                tracked_documents()
+            skip_existing = args.skip_existing_docs and namespace.exists()
+            result = Indexer(namespace, strategy, args.batch_size).index(
+                tracked_documents(),
+                skip_existing_docs=skip_existing,
             )
 
-    print(f"Indexed {total:,} documents into {args.namespace!r}.")
+    print(
+        f"Indexed {result.indexed:,} documents into {args.namespace!r}; "
+        f"skipped {result.skipped:,} existing documents."
+    )
     return 0
 
 

@@ -35,8 +35,10 @@ documents per batch, which is also the indexing default.
 
 Use `--limit N` to index a subset or `--dry-run` to count documents without
 writing. `--drop-existing` explicitly deletes the target namespace before
-indexing, so use it with care. The region defaults to `TURBOPUFFER_REGION` or
-`gcp-us-central1`.
+indexing, so use it with care. `--skip-existing-docs` looks up IDs once per
+batch and skips rows already in the namespace; use it to resume with the same
+schema without re-embedding completed documents. These options are mutually
+exclusive. The region defaults to `TURBOPUFFER_REGION` or `gcp-us-central1`.
 
 ## Query the ESCI corpus
 
