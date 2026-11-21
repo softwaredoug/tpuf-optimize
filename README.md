@@ -59,3 +59,25 @@ with title weighted twice as heavily. Queries with no hits are emitted with the
 `TPufStrategy` owns the ESCI document mapping, namespace schema, and query
 construction. The outer `Indexer` and `Searcher` handle batched namespace I/O,
 so relevance experiments can focus on the strategy without changing the runners.
+
+## Typed evidence candidate reranker
+
+`tpuf_optimize.typed_evidence.rerank_candidates` reranks existing dense and
+lexical candidate lists without indexing additional fields. It fuses the
+ranked lists using the parent's 2:1 dense/lexical RRF (`k=10`, dense-first
+stable ties), then applies a small capped adjustment from three-valued
+brand/color/model/number/unit evidence, distinct title-term coverage and
+proximity, cross-channel rank agreement, and per-channel normalized score
+gaps. Missing slot evidence is neutral. It reads title and explicit brand/color
+metadata only; it does not count title text in the passage as separate evidence.
+
+```python
+from tpuf_optimize.typed_evidence import rerank_candidates
+
+results = rerank_candidates(
+    query_text,
+    dense_candidates,   # ordered best-first, e.g. top 100
+    lexical_candidates, # ordered best-first, e.g. top 100
+    top_k=10,
+)
+```
