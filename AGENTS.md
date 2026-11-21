@@ -181,3 +181,12 @@ When responding, you can tell the overall metric delta, but NEVER SPECIFIC QUERI
 ## Use the batch runner to generate CSVs to submit solutions
 
 The batch query runner should generate CSVs conforming to referee's exected format of search results.
+
+## Agent experiments vs non agent
+
+* The `main` branch exists as the baseline for experimenting with turbopuffer directly
+  (variants branch off this to try ways of optimizing retrieval with programatic interaction
+   with turbopuffer)
+* The `agent-main` branch holds a gpt-6-luna agent intended to use search tools from the 
+  the variants of the pure turbopuffer variants (ie branches of main). This lets us understand
+  how much the better retrieval helps 
