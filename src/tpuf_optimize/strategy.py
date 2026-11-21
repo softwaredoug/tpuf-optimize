@@ -17,6 +17,9 @@ class TPufStrategy:
 
     TITLE_WEIGHT = 2.0
     DESCRIPTION_WEIGHT = 1.0
+    RRF_RANK_CONSTANT = 10
+    RRF_CANDIDATE_DEPTH = 50
+    FUSION_QUERY_COUNT = 4
 
     EMBEDDING_MODEL = "voyage/voyage-4"
     EMBEDDING_DIMS = 1024
@@ -325,3 +328,55 @@ class TPufStrategy:
             "top_k": top_k,
             "include_attributes": ["title", "description", "locale"],
         }
+
+    def fusion_queries(
+        self, query_text: str, locale: str, top_k: int
+    ) -> list[Query]:
+        """Build focused lexical, attribute, and semantic RRF candidate queries."""
+        if not query_text.strip():
+            raise ValueError("query_text must not be empty")
+        if not locale.strip():
+            raise ValueError("locale must not be empty")
+        if top_k < 1:
+            raise ValueError("top_k must be greater than zero")
+
+        locale_analyzer = self.LOCALE_ANALYZERS.get(locale)
+        suffix = (
+            locale_analyzer[0]
+            if locale_analyzer is not None
+            else self.DEFAULT_ANALYZER
+        )
+        filters = ("locale", "Eq", locale)
+        candidate_depth = max(self.RRF_CANDIDATE_DEPTH, top_k)
+        include_attributes = ["title", "description", "locale"]
+
+        def candidate_query(rank_by: RankBy) -> Query:
+            return {
+                "rank_by": rank_by,
+                "filters": filters,
+                "top_k": candidate_depth,
+                "include_attributes": include_attributes,
+            }
+
+        attribute_rank: RankBy = (
+            "Sum",
+            tuple(
+                (f"{field}__{suffix}", "BM25", query_text)
+                for field in ("brand", "bullet_point", "color", "category")
+            ),
+        )
+        return [
+            candidate_query((f"title__{suffix}", "BM25", query_text)),
+            candidate_query((f"description__{suffix}", "BM25", query_text)),
+            candidate_query(attribute_rank),
+            candidate_query(
+                cast(
+                    RankBy,
+                    (
+                        "passage__embed__voyage_4",
+                        "ANN",
+                        ["Embed", query_text],
+                    ),
+                )
+            ),
+        ]

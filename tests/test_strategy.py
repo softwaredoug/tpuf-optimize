@@ -123,6 +123,18 @@ class TPufStrategyTests(unittest.TestCase):
         self.assertIn("title__word_v4__es__stem_stop_fold", str(es_query["rank_by"]))
         self.assertIn("title__kuromoji__ja", str(jp_query["rank_by"]))
 
+    def test_fusion_queries_cover_focused_locale_and_semantic_retrieval(self) -> None:
+        queries = self.strategy.fusion_queries("blue shoe", "us", top_k=10)
+
+        self.assertEqual(len(queries), 4)
+        ranks = [query["rank_by"] for query in queries]
+        self.assertIn("title__word_v4__en__stem_stop", str(ranks[0]))
+        self.assertIn("description__word_v4__en__stem_stop", str(ranks[1]))
+        self.assertIn("brand__word_v4__en__stem_stop", str(ranks[2]))
+        self.assertIn("passage__embed__voyage_4", str(ranks[3]))
+        self.assertEqual(queries[0]["top_k"], self.strategy.RRF_CANDIDATE_DEPTH)
+        self.assertEqual(queries[0]["filters"], ("locale", "Eq", "us"))
+
     def test_pretokenizer_handles_latin_and_japanese(self) -> None:
         self.assertEqual(
             self.strategy.pretokenize("A-B Café"),
