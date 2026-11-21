@@ -138,6 +138,18 @@ class TPufStrategyTests(unittest.TestCase):
         )
         self.assertEqual(vector_query["top_k"], 100)
         self.assertIn("title__word_v4__en__stem_stop", str(lexical_query["rank_by"]))
+        self.assertIn("passage__word_v4__fold", str(lexical_query["rank_by"]))
+        self.assertNotIn("description__word_v4__en__stem_stop", str(lexical_query["rank_by"]))
+        self.assertIn("title__word_v4__es__stem_stop_fold", str(
+            strategy.hybrid_queries("zapato azul", "es-ES", 10)[1]["rank_by"]
+        ))
+        self.assertIn("title__kuromoji__ja", str(
+            strategy.hybrid_queries("青い靴", "ja-JP", 10)[1]["rank_by"]
+        ))
+        self.assertIn(
+            "0.5",
+            str(lexical_query["rank_by"]),
+        )
         self.assertEqual(strategy.hybrid_weights, (1.0, 2.0))
 
     def test_hybrid_is_the_default_query_strategy(self) -> None:

@@ -23,6 +23,7 @@ class TPufStrategy:
 
     TITLE_WEIGHT = 2.0
     DESCRIPTION_WEIGHT = 1.0
+    HYBRID_FOLDED_PASSAGE_WEIGHT = 0.5
     HYBRID_CANDIDATE_DEPTH = 100
 
     def __init__(
@@ -353,10 +354,31 @@ class TPufStrategy:
     def hybrid_queries(
         self, query_text: str, locale: str, top_k: int
     ) -> tuple[Query, Query]:
-        """Return Voyage passage ANN and locale-specific lexical candidates."""
+        """Return Voyage ANN and title/folded-passage lexical candidates."""
         locale = self.normalize_locale(locale)
         candidate_k = max(top_k, self.HYBRID_CANDIDATE_DEPTH)
+        locale_analyzer = self.LOCALE_ANALYZERS.get(locale)
+        suffix = (
+            locale_analyzer[0]
+            if locale_analyzer is not None
+            else self.DEFAULT_ANALYZER
+        )
         lexical_query = self.query(query_text, locale, candidate_k)
+        lexical_query["rank_by"] = (
+            "Sum",
+            (
+                (
+                    "Product",
+                    self.TITLE_WEIGHT,
+                    (f"title__{suffix}", "BM25", query_text),
+                ),
+                (
+                    "Product",
+                    self.HYBRID_FOLDED_PASSAGE_WEIGHT,
+                    ("passage__word_v4__fold", "BM25", query_text),
+                ),
+            ),
+        )
         vector_query: Query = {
             "rank_by": (
                 "passage__embed__voyage_4",
