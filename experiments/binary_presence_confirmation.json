@@ -1,0 +1,70 @@
+{
+  "source_commit": "410302bd8e863ac0b4b95c035a1f4c8280ab236b",
+  "scope": "Assigned Referee training split only; disjoint confirmation pilot; not holdout validation.",
+  "selection": {
+    "method": "SHA-256(query_id), ascending, eligible IDs excluding prior pilot",
+    "eligible_total": 871,
+    "eligible_by_locale": {
+      "es": 119,
+      "jp": 0,
+      "us": 752
+    },
+    "prior_pilot_size": 250,
+    "remaining_eligible_before_selection": 621,
+    "selected": 250,
+    "selected_by_locale": {
+      "es": 26,
+      "us": 224
+    },
+    "overlap_with_prior_pilot": 0
+  },
+  "retrieval": {
+    "serial_lexical_calls": 250,
+    "sdk_max_retries": 0,
+    "rate_limits": 0,
+    "candidate_depth": 200,
+    "deterministic_order": "score_desc_then_doc_id_asc",
+    "lexical_candidates_used": 100
+  },
+  "fusion": {
+    "baseline": "Shared cached parent dense and lexical arms",
+    "candidate": "Same cached dense arm; binary-presence lexical replacement for selected queries only",
+    "rrf_k": 10,
+    "dense_weight": 2,
+    "lexical_weight": 1,
+    "tie_order": "stable dense-first",
+    "final_depth": 10,
+    "non_selected_rankings_unchanged_in_both_full_tasks": true
+  },
+  "rank_100_vs_200_ties": {
+    "queries_with_200_candidates": 243,
+    "same_score": 174,
+    "fraction": 0.7160493827160493,
+    "queries_with_fewer_than_200_candidates": 7,
+    "interpretation": "Deterministic score/ID ordering applies only within the returned 200; server cutoff may omit other documents tied at rank 200."
+  },
+  "paired_training_pilot_ndcg": {
+    "n": 250,
+    "baseline_mean": 0.375348,
+    "candidate_mean": 0.381993,
+    "delta_candidate_minus_baseline": 0.006645,
+    "paired_standard_error": 0.005162,
+    "paired_95_percentile_bootstrap_ci": [
+      -0.003463,
+      0.016761
+    ],
+    "bootstrap_resamples": 20000,
+    "bootstrap_seed": 410302,
+    "by_locale_delta": {
+      "es": 0.010261,
+      "us": 0.006225
+    }
+  },
+  "integrity": {
+    "full_training_referee_tasks_completed": 2,
+    "per_query_metrics_retained_for_pilot_only": true,
+    "query_ids_rows_and_tokens_committed": false,
+    "writes_or_embedding_calls": 0,
+    "holdout_access": false
+  }
+}
