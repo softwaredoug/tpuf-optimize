@@ -63,7 +63,13 @@ so relevance experiments can focus on the strategy without changing the runners.
 `tpuf_optimize.product_rerank.rerank_candidates` is a pure reranker for an
 already-retrieved dense/lexical candidate union. Its default reciprocal-rank
 fusion weights are dense:lexical = 2:1 with an RRF constant of 10; bounded title
-and explicit product specification signals adjust that baseline. With zero
-adjustment, score ties retain the parent's dense-first stable order. Pass
-`max_adjustment=0` to inspect the unmodified weighted-RRF ranking. This helper
-does not issue retrieval or Turbopuffer requests.
+and explicit product specification signals adjust that baseline. The pinned
+training configuration uses `max_adjustment=0.05` and `top_k=10`. On the
+verified 1,000-query training cache, it was selected from adjustment bounds
+`0`, `0.012`, `0.024`, and `0.05` using a deterministic SHA-256 query-ID split
+(500 selection / 500 evaluation). Against cached parent RRF, paired evaluation
+NDCG was 0.370857 → 0.376438 (+0.005582; 121 wins, 53 losses, 326 ties).
+Zero-adjustment output reproduced the cached parent per-query NDCG exactly.
+With zero adjustment, score ties retain the parent's dense-first stable order.
+Pass `max_adjustment=0` to inspect the unmodified weighted-RRF ranking. This
+helper does not issue retrieval or Turbopuffer requests.

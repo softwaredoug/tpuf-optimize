@@ -13,6 +13,12 @@ import unicodedata
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+DEFAULT_DENSE_WEIGHT = 2.0
+DEFAULT_LEXICAL_WEIGHT = 1.0
+DEFAULT_RANK_CONSTANT = 10
+PINNED_MAX_ADJUSTMENT = 0.05
+PINNED_TOP_K = 10
+
 _TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
 _NUMBER_RE = re.compile(r"(?<![\w.])\d+(?:[.,]\d+)?(?![\w.])")
 _UNIT_RE = re.compile(
@@ -269,10 +275,10 @@ def rerank_candidates(
     lexical: Sequence[Mapping[str, Any]],
     *,
     top_k: int | None = None,
-    lexical_weight: float = 1.0,
-    dense_weight: float = 2.0,
-    rank_constant: int = 10,
-    max_adjustment: float = 0.012,
+    lexical_weight: float = DEFAULT_LEXICAL_WEIGHT,
+    dense_weight: float = DEFAULT_DENSE_WEIGHT,
+    rank_constant: int = DEFAULT_RANK_CONSTANT,
+    max_adjustment: float = PINNED_MAX_ADJUSTMENT,
 ) -> list[dict[str, Any]]:
     """Fuse a dense/lexical union and apply bounded product-title evidence.
 

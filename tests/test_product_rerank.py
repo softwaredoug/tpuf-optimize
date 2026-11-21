@@ -4,10 +4,24 @@ from __future__ import annotations
 
 import unittest
 
-from tpuf_optimize.product_rerank import rerank_candidates
+from tpuf_optimize.product_rerank import (
+    DEFAULT_DENSE_WEIGHT,
+    DEFAULT_LEXICAL_WEIGHT,
+    DEFAULT_RANK_CONSTANT,
+    PINNED_MAX_ADJUSTMENT,
+    PINNED_TOP_K,
+    rerank_candidates,
+)
 
 
 class ProductRerankTests(unittest.TestCase):
+    def test_pinned_configuration(self) -> None:
+        self.assertEqual(DEFAULT_DENSE_WEIGHT, 2.0)
+        self.assertEqual(DEFAULT_LEXICAL_WEIGHT, 1.0)
+        self.assertEqual(DEFAULT_RANK_CONSTANT, 10)
+        self.assertEqual(PINNED_MAX_ADJUSTMENT, 0.05)
+        self.assertEqual(PINNED_TOP_K, 10)
+
     def test_uses_dense_two_to_one_lexical_rrf_as_base(self) -> None:
         results = rerank_candidates(
             "ordinary query",
@@ -214,7 +228,12 @@ class ProductRerankTests(unittest.TestCase):
         self.assertEqual([row["doc_id"] for row in first], ["a", "b"])
         self.assertEqual(first, second)
         self.assertEqual(lexical, before)
-        self.assertTrue(all(abs(row["rerank_adjustment"]) <= 0.012 for row in first))
+        self.assertTrue(
+            all(
+                abs(row["rerank_adjustment"]) <= PINNED_MAX_ADJUSTMENT
+                for row in first
+            )
+        )
 
     def test_top_k_and_validation(self) -> None:
         self.assertEqual(
