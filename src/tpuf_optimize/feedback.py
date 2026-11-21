@@ -200,6 +200,48 @@ def weighted_rrf(
     return [(doc_id, scores[doc_id], documents[doc_id]) for doc_id in ordered]
 
 
+def bounded_followup_fusion(
+    baseline: Sequence[tuple[str, float, Candidate]],
+    followup: Sequence[Candidate],
+    *,
+    top_k: int = 10,
+    max_boost_fraction: float = 0.10,
+    rank_constant: int = 10,
+) -> list[tuple[str, float, Candidate]]:
+    """Add one lexical follow-up list with a hard-capped contribution.
+
+    The baseline remains the primary score (normally the pinned 2:1 dense /
+    original-BM25 RRF). A follow-up result can add at most ``max_boost_fraction``
+    of the best baseline score, with lower ranks contributing less. The single
+    follow-up list is counted once; callers must not issue or fuse per-term
+    lists separately.
+    """
+    if not 0 <= max_boost_fraction <= 0.10:
+        raise ValueError("max_boost_fraction must be between zero and 0.10")
+    if top_k < 1 or rank_constant < 0:
+        raise ValueError("top_k must be positive and rank_constant non-negative")
+    if not baseline:
+        return []
+
+    scores = {doc_id: score for doc_id, score, _candidate in baseline}
+    documents = {
+        doc_id: candidate for doc_id, _score, candidate in baseline
+    }
+    cap = baseline[0][1] * max_boost_fraction
+    seen_followup: set[str] = set()
+    for rank, candidate in enumerate(followup, start=1):
+        doc_id = str(candidate.get("doc_id", ""))
+        if not doc_id or doc_id in seen_followup:
+            continue
+        seen_followup.add(doc_id)
+        documents.setdefault(doc_id, candidate)
+        contribution = cap * (rank_constant + 1) / (rank_constant + rank)
+        scores[doc_id] = scores.get(doc_id, 0.0) + contribution
+
+    ordered = sorted(scores, key=scores.__getitem__, reverse=True)[:top_k]
+    return [(doc_id, scores[doc_id], documents[doc_id]) for doc_id in ordered]
+
+
 def offline_feedback_rerank(
     query: str,
     locale: str,

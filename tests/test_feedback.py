@@ -5,6 +5,7 @@ from __future__ import annotations
 import unittest
 
 from tpuf_optimize.feedback import (
+    bounded_followup_fusion,
     offline_feedback_rerank,
     plan_feedback,
     weighted_rrf,
@@ -144,6 +145,29 @@ class FeedbackTests(unittest.TestCase):
             max(row[1] for row in baseline),
             original[0][1] * 1.10 + 1e-12,
         )
+
+    def test_one_followup_list_has_a_hard_score_cap(self) -> None:
+        baseline = weighted_rrf(self.dense, self.lexical, top_k=6)
+        followup = [
+            _candidate("new", "waterproof outdoor hiking"),
+            _candidate("d1", "blue shoe waterproof trail"),
+            _candidate("new", "duplicate result"),
+        ]
+
+        fused = bounded_followup_fusion(baseline, followup, top_k=8)
+        baseline_scores = {row[0]: row[1] for row in baseline}
+        max_contribution = baseline[0][1] * 0.10
+
+        self.assertLessEqual(
+            fused[[row[0] for row in fused].index("new")][1],
+            max_contribution + 1e-12,
+        )
+        self.assertLessEqual(
+            fused[[row[0] for row in fused].index("d1")][1]
+            - baseline_scores["d1"],
+            max_contribution + 1e-12,
+        )
+        self.assertEqual(sum(row[0] == "new" for row in fused), 1)
 
 
 if __name__ == "__main__":
