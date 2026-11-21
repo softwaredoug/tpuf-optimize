@@ -87,6 +87,12 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--dense-weight", type=float, default=2.0)
     parser.add_argument("--lexical-weight", type=float, default=1.0)
+    parser.add_argument(
+        "--attribute-weight",
+        type=float,
+        default=0.25,
+        help="Add a locale-aware product-field BM25 candidate to hybrid RRF.",
+    )
     parser.add_argument("--rrf-constant", type=int, default=10)
     return parser
 
@@ -102,6 +108,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--rrf-constant must not be negative")
     if args.dense_weight < 0 or args.lexical_weight < 0:
         parser.error("hybrid weights must not be negative")
+    if args.attribute_weight < 0:
+        parser.error("--attribute-weight must not be negative")
     if not args.lexical_only and args.dense_weight + args.lexical_weight == 0:
         parser.error("at least one hybrid weight must be greater than zero")
     if not os.environ.get("TURBOPUFFER_API_KEY"):
@@ -119,6 +127,7 @@ def main(argv: list[str] | None = None) -> int:
             strategy = TPufStrategy(
                 hybrid_weights=hybrid_weights,
                 rank_constant=args.rrf_constant,
+                attribute_weight=args.attribute_weight,
             )
             searcher = Searcher(namespace, strategy, args.batch_size)
             _write_results(args.output, requests, searcher, args.top_k)

@@ -29,6 +29,7 @@ class TPufStrategy:
         self,
         hybrid_weights: tuple[float, float] | None = (2.0, 1.0),
         rank_constant: int = 10,
+        attribute_weight: float = 0.25,
     ) -> None:
         if hybrid_weights is not None and (
             len(hybrid_weights) != 2
@@ -44,8 +45,11 @@ class TPufStrategy:
             )
         if rank_constant < 0:
             raise ValueError("rank_constant must not be negative")
+        if not math.isfinite(attribute_weight) or attribute_weight < 0:
+            raise ValueError("attribute_weight must be finite and non-negative")
         self.hybrid_weights = hybrid_weights
         self.rank_constant = rank_constant
+        self.attribute_weight = attribute_weight
 
     EMBEDDING_MODEL = "voyage/voyage-4"
     EMBEDDING_DIMS = 1024
@@ -352,8 +356,8 @@ class TPufStrategy:
 
     def hybrid_queries(
         self, query_text: str, locale: str, top_k: int
-    ) -> tuple[Query, Query]:
-        """Return Voyage passage ANN and locale-specific lexical candidates."""
+    ) -> tuple[Query, ...]:
+        """Return dense, lexical, and optionally attribute BM25 candidates."""
         locale = self.normalize_locale(locale)
         candidate_k = max(top_k, self.HYBRID_CANDIDATE_DEPTH)
         lexical_query = self.query(query_text, locale, candidate_k)
@@ -367,7 +371,42 @@ class TPufStrategy:
             "top_k": candidate_k,
             "include_attributes": ["title", "description", "locale"],
         }
-        return vector_query, lexical_query
+        if self.attribute_weight == 0:
+            return vector_query, lexical_query
+        attribute_query: Query = {
+            "rank_by": self.attribute_rank_by(query_text, locale),
+            "filters": ("locale", "Eq", locale),
+            "top_k": candidate_k,
+            "include_attributes": ["title", "description", "locale"],
+        }
+        return vector_query, lexical_query, attribute_query
+
+    def attribute_rank_by(self, query_text: str, locale: str) -> RankBy:
+        """Build locale-aware BM25 over existing product-specific fields."""
+        normalized_locale = self.normalize_locale(locale)
+        locale_analyzer = self.LOCALE_ANALYZERS.get(normalized_locale)
+        suffix = (
+            locale_analyzer[0]
+            if locale_analyzer is not None
+            else self.DEFAULT_ANALYZER
+        )
+        fields = (
+            ("brand", 2.0),
+            ("bullet_point", 1.0),
+            ("color", 1.0),
+            ("category", 1.0),
+        )
+        return (
+            "Sum",
+            tuple(
+                (
+                    "Product",
+                    weight,
+                    (f"{field}__{suffix}", "BM25", query_text),
+                )
+                for field, weight in fields
+            ),
+        )
 
     @staticmethod
     def reciprocal_rank_fusion(

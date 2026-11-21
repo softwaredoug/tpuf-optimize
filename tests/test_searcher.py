@@ -31,7 +31,9 @@ class MemoryNamespace:
 class SearcherTests(unittest.TestCase):
     def test_hybrid_batches_fuse_each_vector_and_lexical_pair(self) -> None:
         namespace = MemoryNamespace()
-        strategy = TPufStrategy(hybrid_weights=(1.0, 2.0))
+        strategy = TPufStrategy(
+            hybrid_weights=(1.0, 2.0), attribute_weight=0.0
+        )
         requests = [
             SearchRequest("q1", "blue shoe", "us"),
             SearchRequest("q2", "red shoe", "us"),
@@ -48,18 +50,61 @@ class SearcherTests(unittest.TestCase):
             [["doc-1", "doc-0"], ["doc-3", "doc-2"]],
         )
 
+    def test_attribute_candidate_is_fused_as_a_third_ranking(self) -> None:
+        namespace = MemoryNamespace()
+        strategy = TPufStrategy(attribute_weight=0.25)
+        results = list(
+            Searcher(namespace, strategy, batch_size=100).search(
+                [SearchRequest("q1", "blue shoe", "en-US")], top_k=5
+            )
+        )
+
+        self.assertEqual(len(namespace.queries), 3)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(len(results[0][1]), 3)
+        self.assertEqual(
+            [str(row.id) for row in results[0][1]],
+            ["doc-0", "doc-1", "doc-2"],
+        )
+        self.assertAlmostEqual(results[0][1][0]["$dist"], 2 / 11)
+        self.assertAlmostEqual(results[0][1][1]["$dist"], 1 / 11)
+        self.assertAlmostEqual(results[0][1][2]["$dist"], 0.25 / 11)
+        self.assertIn(
+            "brand__word_v4__en__stem_stop",
+            str(namespace.queries[2]["rank_by"]),
+        )
+
     def test_hybrid_batches_do_not_exceed_multi_query_limit(self) -> None:
         namespace = MemoryNamespace()
         requests = [
             SearchRequest(f"q{i}", "product query", "us") for i in range(9)
         ]
 
-        results = list(Searcher(namespace, TPufStrategy(), batch_size=100).search(
-            requests, top_k=5
-        ))
+        results = list(
+            Searcher(
+                namespace,
+                TPufStrategy(attribute_weight=0.0),
+                batch_size=100,
+            ).search(requests, top_k=5)
+        )
 
         self.assertEqual(len(results), 9)
         self.assertEqual(namespace.call_sizes, [16, 2])
+
+    def test_three_retrievers_respect_multi_query_limit(self) -> None:
+        namespace = MemoryNamespace()
+        requests = [
+            SearchRequest(f"q{i}", "product query", "us") for i in range(6)
+        ]
+
+        results = list(
+            Searcher(
+                namespace, TPufStrategy(attribute_weight=0.25), batch_size=100
+            ).search(requests, top_k=5)
+        )
+
+        self.assertEqual(len(results), 6)
+        self.assertEqual(namespace.call_sizes, [15, 3])
 
 
 if __name__ == "__main__":

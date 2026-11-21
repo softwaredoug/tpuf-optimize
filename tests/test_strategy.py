@@ -127,7 +127,9 @@ class TPufStrategyTests(unittest.TestCase):
         self.assertEqual(us_query, english_locale_query)
 
     def test_hybrid_queries_use_voyage_passage_and_lexical_ranker(self) -> None:
-        strategy = TPufStrategy(hybrid_weights=(1.0, 2.0))
+        strategy = TPufStrategy(
+            hybrid_weights=(1.0, 2.0), attribute_weight=0.0
+        )
         vector_query, lexical_query = strategy.hybrid_queries(
             "blue shoe", "us", top_k=20
         )
@@ -140,8 +142,35 @@ class TPufStrategyTests(unittest.TestCase):
         self.assertIn("title__word_v4__en__stem_stop", str(lexical_query["rank_by"]))
         self.assertEqual(strategy.hybrid_weights, (1.0, 2.0))
 
+    def test_hybrid_can_add_locale_aware_product_attribute_candidate(self) -> None:
+        strategy = TPufStrategy(attribute_weight=0.25)
+        vector_query, lexical_query, attribute_query = strategy.hybrid_queries(
+            "blue shoe", "en-US", top_k=20
+        )
+
+        self.assertEqual(vector_query["top_k"], 100)
+        self.assertIn(
+            "title__word_v4__en__stem_stop", str(lexical_query["rank_by"])
+        )
+        self.assertIn(
+            "brand__word_v4__en__stem_stop", str(attribute_query["rank_by"])
+        )
+        self.assertIn(
+            "bullet_point__word_v4__en__stem_stop",
+            str(attribute_query["rank_by"]),
+        )
+        self.assertIn(
+            "color__word_v4__en__stem_stop", str(attribute_query["rank_by"])
+        )
+        self.assertIn(
+            "category__word_v4__en__stem_stop",
+            str(attribute_query["rank_by"]),
+        )
+        self.assertEqual(attribute_query["filters"], ("locale", "Eq", "us"))
+
     def test_hybrid_is_the_default_query_strategy(self) -> None:
         self.assertEqual(TPufStrategy().hybrid_weights, (2.0, 1.0))
+        self.assertEqual(TPufStrategy().attribute_weight, 0.25)
         self.assertIsNone(TPufStrategy(hybrid_weights=None).hybrid_weights)
 
     def test_reciprocal_rank_fusion_combines_rankings(self) -> None:
