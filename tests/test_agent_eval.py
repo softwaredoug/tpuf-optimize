@@ -9,6 +9,7 @@ from pathlib import Path
 
 from tpuf_optimize.agent_eval import (
     _paired_bootstrap_ci,
+    _read_task,
     _read_state,
     compare_results,
     extract_recommendation_ids,
@@ -118,6 +119,29 @@ class CheckpointTests(unittest.TestCase):
                     [SearchRequest("q2", "other", "en-US")],
                 )
 
+    def test_task_reader_requires_one_thousand_queries(self) -> None:
+        task = {
+            "dataset_name": "esci",
+            "task": {"id": "private-test-task"},
+            "queries": [
+                {
+                    "query_id": f"q{index}",
+                    "query_text": f"synthetic query {index}",
+                    "metadata": {"locale": "en-US"},
+                }
+                for index in range(1000)
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "task.json"
+            path.write_text(json.dumps(task), encoding="utf-8")
+            _, requests = _read_task(path, "direct")
+            self.assertEqual(len(requests), 1000)
+            task["queries"].pop()
+            path.write_text(json.dumps(task), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "exactly 1000"):
+                _read_task(path, "direct")
+
     def test_paired_bootstrap_is_deterministic_and_respects_constant_deltas(self) -> None:
         first = _paired_bootstrap_ci([0.1, 0.1, 0.1])
         second = _paired_bootstrap_ci([0.1, 0.1, 0.1])
@@ -128,7 +152,7 @@ class CheckpointTests(unittest.TestCase):
     def test_compare_reports_paired_ndcg_latency_and_failure_counts(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            query_ids = [f"q{index}" for index in range(500)]
+            query_ids = [f"q{index}" for index in range(1000)]
             direct_result = {
                 "metrics": {"ndcg": 0.5},
                 "queries": [{"query_id": key, "ndcg": 0.5} for key in query_ids],
@@ -190,11 +214,11 @@ class CheckpointTests(unittest.TestCase):
             self.assertAlmostEqual(
                 summary["paired_bootstrap_95pct_ci"][1], 0.1
             )
-            self.assertEqual(summary["agent_tool_calls_total"], 1000)
+            self.assertEqual(summary["agent_tool_calls_total"], 2000)
             self.assertEqual(
                 summary["agent_latency"]["failure_counts"], {"RuntimeError": 4}
             )
-            self.assertEqual(summary["agent_latency"]["invalid_id_count"], 500)
+            self.assertEqual(summary["agent_latency"]["invalid_id_count"], 1000)
 
 
 if __name__ == "__main__":

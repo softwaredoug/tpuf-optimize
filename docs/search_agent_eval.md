@@ -14,13 +14,14 @@ strict evaluation adapter; the agent output/prompt is unchanged.
 
 ## Assigned task data and privacy
 
-The orchestrator pre-created two matched Referee tasks from this subagent's
-single assigned training split. Their private responses are at
-`/private/var/folders/ww/t2bpzntd1990wczd0b7px2640000gn/T/opencode/esci-search-agent-training-eval/{direct,agent}.task.json`.
-Both have 500 identical queries. The only permitted token file is the
-`referee.token` in that same directory. The evaluator never creates tasks,
-reads other tokens, or selects another split. Task files, checkpoints, CSVs,
-and results remain outside the repository with restrictive permissions.
+The authorized training directory is
+`/private/var/folders/ww/t2bpzntd1990wczd0b7px2640000gn/T/opencode/esci-search-agent-training-eval-1000/`.
+Its `reference-task.json` is the direct arm; a second Referee task was created
+using only that directory's `referee.token` for the agent arm. Both have 1,000
+identical queries. The evaluator never creates further tasks, reads any other
+tokens/private artifacts, or accesses the separate holdout split. Task files,
+checkpoints, CSVs, and results remain outside the repository with restrictive
+permissions.
 
 No live retrieval or OpenAI call has been made during implementation. Mocked
 tests are safe to run at any time. Live execution requires both an explicit
@@ -51,7 +52,7 @@ row for no valid recommendation. Referee scores use rank (not score).
 
 ## Paired analysis and call budget
 
-After both arms complete, `compare` checks identical 500-query ID coverage,
+After both arms complete, `compare` checks identical 1,000-query ID coverage,
 calculates per-query agent-minus-direct NDCG@10 and a deterministic paired
 bootstrap 95% CI, and reports end-to-end and backend-only p50/p95 separately.
 The agent's residual (end-to-end minus measured backend) summarizes SDK,
@@ -59,13 +60,13 @@ model, and orchestration overhead. Counts include tool calls, invalid IDs,
 missing-ID queries, and output-format failures. The aggregate summary is
 private; only aggregate metrics should be committed after live measurement.
 
-For 500 queries per arm, a direct run normally makes approximately 1,000
+For 1,000 queries per arm, a direct run normally makes approximately 2,000
 Turbopuffer HTTP operations: one multi-query candidate request and one
 ID-filtered feature request per query. The agent makes two such operations per
-tool call, up to three tool calls per query: at most about 3,000 Turbopuffer
-operations. Across both arms, the expected total is about 4,000 such
+tool call, up to three tool calls per query: at most about 6,000 Turbopuffer
+operations. Across both arms, the expected total is about 8,000 such
 operations at the agent's maximum tool budget; serial fallback and 429 retries
 may add calls. Agent orchestration can make up to four model turns per query
 (one initial turn plus up to three follow-up/tool turns), or at most about
-2,000 OpenAI requests for the 500-query agent arm. The exact number of
+4,000 OpenAI requests for the 1,000-query agent arm. The exact number of
 successful tool calls and measured latencies are captured by the run.

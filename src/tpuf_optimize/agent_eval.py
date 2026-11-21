@@ -37,13 +37,14 @@ from tpuf_optimize.searcher import SearchRequest
 REFEREE_URL = "http://localhost:8080"
 PRIVATE_DIR = Path(
     "/private/var/folders/ww/t2bpzntd1990wczd0b7px2640000gn/T/opencode/"
-    "esci-search-agent-training-eval"
+    "esci-search-agent-training-eval-1000"
 )
 TOKEN_FILE = PRIVATE_DIR / "referee.token"
 ARM_TASK_FILES = {
-    "direct": PRIVATE_DIR / "direct.task.json",
+    "direct": PRIVATE_DIR / "reference-task.json",
     "agent": PRIVATE_DIR / "agent.task.json",
 }
+TASK_QUERY_COUNT = 1000
 MODEL = "gpt-5-mini"
 CHECKPOINT_VERSION = 1
 BOOTSTRAP_SAMPLES = 10_000
@@ -88,8 +89,10 @@ def _read_task(path: Path, arm: str) -> tuple[dict[str, Any], list[SearchRequest
     queries = task.get("queries")
     if not isinstance(task_info, dict) or not isinstance(task_info.get("id"), str):
         raise ValueError("The assigned task file has no task ID.")
-    if not isinstance(queries, list) or len(queries) != 500:
-        raise ValueError("Each assigned training task must contain exactly 500 queries.")
+    if not isinstance(queries, list) or len(queries) != TASK_QUERY_COUNT:
+        raise ValueError(
+            f"Each assigned training task must contain exactly {TASK_QUERY_COUNT} queries."
+        )
     requests: list[SearchRequest] = []
     seen: set[str] = set()
     for item in queries:
@@ -482,8 +485,13 @@ def compare_results(
     agent = json.loads(agent_result_path.read_text(encoding="utf-8"))
     direct_scores = {item["query_id"]: item["ndcg"] for item in direct["queries"]}
     agent_scores = {item["query_id"]: item["ndcg"] for item in agent["queries"]}
-    if set(direct_scores) != set(agent_scores) or len(direct_scores) != 500:
-        raise ValueError("Completed Referee tasks are not a matched 500-query pair.")
+    if (
+        set(direct_scores) != set(agent_scores)
+        or len(direct_scores) != TASK_QUERY_COUNT
+    ):
+        raise ValueError(
+            f"Completed Referee tasks are not a matched {TASK_QUERY_COUNT}-query pair."
+        )
     query_ids = list(direct_scores)
     deltas = [agent_scores[key] - direct_scores[key] for key in query_ids]
 
