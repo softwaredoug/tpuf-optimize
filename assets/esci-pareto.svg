@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1060 390" role="img" aria-labelledby="title desc">
+<title id="title">ESCI relevance and latency Pareto frontier</title>
+<desc id="desc">Median latency in milliseconds versus NDCG at 10. Lower latency and higher NDCG are better.</desc>
+<style>text{font:14px system-ui,sans-serif;fill:#172438}.small{font-size:12px;fill:#43546b}.heading{font-size:23px;font-weight:bold}.axis{stroke:#73829a}.grid{stroke:#dfe6ee}</style>
+<rect width="100%" height="100%" rx="12" fill="#f6f8fb"/>
+<text x="32" y="40" class="heading">ESCI relevance vs. latency</text>
+<text x="32" y="64" class="small">0 measured; 10 pending. Faster and more relevant is upper left.</text>
+<text x="530" y="195" text-anchor="middle">Awaiting both NDCG@10 and latency measurements.</text>
+</svg>

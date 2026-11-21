@@ -59,3 +59,32 @@ with title weighted twice as heavily. Queries with no hits are emitted with the
 `TPufStrategy` owns the ESCI document mapping, namespace schema, and query
 construction. The outer `Indexer` and `Searcher` handle batched namespace I/O,
 so relevance experiments can focus on the strategy without changing the runners.
+
+## ESCI 5,000-query leaderboard
+
+The ten variants below are being evaluated on the same 5,000-query Referee
+split (`esci-products`, seed `20261122`). The branch links point to the
+experiment histories; commit hashes identify the exact versions under test.
+Rows are not ranked until the new NDCG@10 results are available. Latency will
+report end-to-end p50 / p95 in milliseconds on the same fixed 100-query sample
+for each variant, measured independently of the shared retrieval pass.
+
+| Variant | Latency p50 / p95 (ms) | Experiment branch | Evaluated commit | NDCG@10 |
+|---|---:|---|---|---:|
+| Learned pairwise reranker | Pending | [research/learned-rank](https://github.com/softwaredoug/tpuf-optimize/tree/research/learned-rank) | `adf9768` | Pending |
+| Identifier-gated RRF | Pending | [confidence-aware-fusion](https://github.com/softwaredoug/tpuf-optimize/tree/confidence-aware-fusion) | `7e22661` | Pending |
+| Deterministic product reranker | Pending | [research-product-rerank](https://github.com/softwaredoug/tpuf-optimize/tree/research-product-rerank) | `7ffd772` | Pending |
+| Min-max score fusion | Pending | [research-score-fusion](https://github.com/softwaredoug/tpuf-optimize/tree/research-score-fusion) | `41e64d4` | Pending |
+| 2:1 Voyage-4 + BM25 RRF | Pending | [experiment-6-hybrid-rrf](https://github.com/softwaredoug/tpuf-optimize/tree/experiment-6-hybrid-rrf) | `cc5fc8a` | Pending |
+| Four-channel RRF | Pending | [exp7-rank-fusion](https://github.com/softwaredoug/tpuf-optimize/tree/exp7-rank-fusion) | `3f4c9bc` | Pending |
+| Passage BM25 + fuzzy title/brand | Pending | [exp3-bm25-passage-fuzzy](https://github.com/softwaredoug/tpuf-optimize/tree/exp3-bm25-passage-fuzzy) | `c46c935` | Pending |
+| Title + locale-aware passage BM25 | Pending | [relevance/field-weights-passage](https://github.com/softwaredoug/tpuf-optimize/tree/relevance/field-weights-passage) | `cdb2d64` | Pending |
+| Title + folded passage BM25 | Pending | [experiment-2-locale-analyzers](https://github.com/softwaredoug/tpuf-optimize/tree/experiment-2-locale-analyzers) | `9340694` | Pending |
+| Voyage-4-only exact kNN | Pending | [experiment/voyage4-only](https://github.com/softwaredoug/tpuf-optimize/tree/experiment/voyage4-only) | `3505c15` | Pending |
+
+![ESCI NDCG@10 versus median per-query latency](assets/esci-pareto.svg)
+
+The Pareto frontier highlights variants that no other measured variant
+matches or beats on both p50 latency and NDCG@10 while improving at least
+one. Pending rows are not plotted. After updating the table, regenerate
+the chart with `uv run python scripts/plot_pareto.py`.
