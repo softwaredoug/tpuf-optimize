@@ -34,14 +34,20 @@ class NamespaceSearcher(Protocol):
 class Searcher:
     """Batch search requests and preserve their input order."""
 
+    MAX_BATCH_SIZE = 16
+
     def __init__(
         self,
         namespace: NamespaceSearcher,
         strategy: TPufStrategy,
-        batch_size: int = 100,
+        batch_size: int = MAX_BATCH_SIZE,
     ) -> None:
         if batch_size < 1:
             raise ValueError("batch_size must be greater than zero")
+        if batch_size > self.MAX_BATCH_SIZE:
+            raise ValueError(
+                f"batch_size must be no greater than {self.MAX_BATCH_SIZE}"
+            )
         self.namespace = namespace
         self.strategy = strategy
         self.batch_size = batch_size

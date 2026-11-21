@@ -114,14 +114,31 @@ class TPufStrategyTests(unittest.TestCase):
             document["passage__embed__voyage_4"], "Only the description"
         )
 
-    def test_default_query_selects_locale_analyzer(self) -> None:
+    def test_query_uses_only_the_voyage_passage_vector(self) -> None:
         us_query = self.strategy.query("blue shoe", "us", top_k=10)
         es_query = self.strategy.query("zapato azul", "es", top_k=10)
         jp_query = self.strategy.query("青い靴", "jp", top_k=10)
 
-        self.assertIn("title__word_v4__en__stem_stop", str(us_query["rank_by"]))
-        self.assertIn("title__word_v4__es__stem_stop_fold", str(es_query["rank_by"]))
-        self.assertIn("title__kuromoji__ja", str(jp_query["rank_by"]))
+        expected_rank_by = (
+            "embedding__voyage_4__passage",
+            "kNN",
+            (
+                "Embed",
+                "blue shoe",
+                {"model": "voyage/voyage-4"},
+            ),
+        )
+        self.assertEqual(us_query["rank_by"], expected_rank_by)
+        self.assertEqual(
+            es_query["rank_by"][0], "embedding__voyage_4__passage"
+        )
+        self.assertEqual(jp_query["rank_by"][0], "embedding__voyage_4__passage")
+        self.assertEqual(us_query["filters"], ("locale", "Eq", "us"))
+        self.assertEqual(es_query["filters"], ("locale", "Eq", "es"))
+        self.assertEqual(jp_query["filters"], ("locale", "Eq", "jp"))
+        for query in (us_query, es_query, jp_query):
+            self.assertNotIn("BM25", str(query["rank_by"]))
+            self.assertNotIn("Fuzzy", str(query["rank_by"]))
 
     def test_pretokenizer_handles_latin_and_japanese(self) -> None:
         self.assertEqual(

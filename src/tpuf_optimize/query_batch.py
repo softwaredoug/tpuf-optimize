@@ -64,7 +64,7 @@ def _write_results(
                 score = result["$dist"]
                 if not isinstance(score, (float, int)):
                     raise ValueError(
-                        f"Missing numeric BM25 score for document {document_id!r}"
+                        f"Missing numeric retrieval score for document {document_id!r}"
                     )
                 writer.writerow([request.query_id, document_id, rank, score])
 
@@ -79,7 +79,7 @@ def _parser() -> argparse.ArgumentParser:
         default=os.environ.get("TURBOPUFFER_REGION", "gcp-us-central1"),
     )
     parser.add_argument("--top-k", type=int, default=10)
-    parser.add_argument("--batch-size", type=int, default=100)
+    parser.add_argument("--batch-size", type=int, default=Searcher.MAX_BATCH_SIZE)
     return parser
 
 
@@ -90,6 +90,10 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--top-k must be greater than zero")
     if args.batch_size < 1:
         parser.error("--batch-size must be greater than zero")
+    if args.batch_size > Searcher.MAX_BATCH_SIZE:
+        parser.error(
+            f"--batch-size must be no greater than {Searcher.MAX_BATCH_SIZE}"
+        )
     if not os.environ.get("TURBOPUFFER_API_KEY"):
         parser.error("Set TURBOPUFFER_API_KEY before querying.")
 
