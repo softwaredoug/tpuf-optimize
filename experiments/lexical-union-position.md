@@ -10,6 +10,18 @@ position reranker with a maximum boost of `0.18`. The reranker uses only
 returned title, description, and brand text. The final result is truncated to
 10. This uses existing indexed data and no embedding or external model.
 
+## Reproduction
+
+Run the current holdout leader against a query CSV with:
+
+```sh
+uv run query --queries queries.csv --output results.csv \
+  --lexical-candidate-fusion --lexical-rerank \
+  --lexical-cross-field-boost 0.03 \
+  --lexical-position-aggregation rms \
+  --field-fusion passage_fold_brand_whitespace
+```
+
 ## Matched Referee results
 
 | Variant | Training NDCG@10 | Holdout NDCG@10 |
