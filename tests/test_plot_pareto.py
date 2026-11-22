@@ -39,3 +39,16 @@ class ParetoPlotTests(unittest.TestCase):
         self.assertIn("End-to-end p95 latency (ms)", chart)
         self.assertNotIn("End-to-end p50 latency (ms)", chart)
         ElementTree.fromstring(chart)
+
+    def test_cost_chart_accepts_a_custom_axis(self) -> None:
+        chart = render_svg(
+            [Point("Variant", 6.34, 0.45)],
+            0,
+            "cost",
+            chart_title="Relevance vs. model cost",
+            x_axis_label="Estimated cost per 5,000 queries (USD)",
+            x_description="Estimated model inference cost",
+        )
+        self.assertIn("Estimated cost per 5,000 queries (USD)", chart)
+        self.assertIn("Relevance vs. model cost", chart)
+        ElementTree.fromstring(chart)

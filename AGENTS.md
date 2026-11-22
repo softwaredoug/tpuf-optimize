@@ -189,4 +189,11 @@ The batch query runner should generate CSVs conforming to referee's exected form
    with turbopuffer)
 * The `agent-main` branch holds a gpt-6-luna agent intended to use search tools from the
   the variants of the pure turbopuffer variants (ie branches of main). This lets us understand
-   how much the better retrieval helps
+  how much the better retrieval helps
+  It's based on main, but adds parallelization etc thats particularly useful for search agents
+
+  It's not intended to be directly optimized, but instead
+
+  (a) branch agent-main
+  (b) create a search tool with variants
+  (c) then have the agent benchmark how well those tools work at search

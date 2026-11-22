@@ -101,6 +101,14 @@
       "p50_ms": 59.76125062443316,
       "p95_ms": 72.3788330797106,
       "retries_429": 0
+    },
+    "voyage-rerank": {
+      "commit": "0a5816eeac4dcfcf1afe10da1e72af770feae208",
+      "ndcg_at_10": 0.4567691025099414,
+      "disjoint_ndcg_at_10": 0.4561984391709319,
+      "p50_ms": 240.07410451304168,
+      "p95_ms": 381.74895802512765,
+      "retries_429": 0
     }
   },
   "cost_estimates": {
@@ -112,6 +120,11 @@
     "voyage4_embedding_usd_per_million_tokens": 0.06,
     "voyage4_embedding_usd_per_query": 3.2737799999999996e-07,
     "voyage4_embedding_usd_total": 0.0016368899999999998,
+    "native_rerank_token_proxy_per_query": 25380,
+    "native_rerank_prices_usd_per_million_tokens": {
+      "cohere/rerank-v3.5": 0.1,
+      "voyage/rerank-3": 0.05
+    },
     "variant_cost_per_query_usd": {
       "typed": 3.2737799999999996e-07,
       "computed": 3.2737799999999996e-07,
@@ -124,7 +137,23 @@
       "fuzzy": 0.0,
       "passage": 0.0,
       "voyage": 3.2737799999999996e-07,
-      "bm25": 0.0
+      "bm25": 0.0,
+      "voyage-rerank": 0.001269327378
+    },
+    "variant_cost_per_run_usd": {
+      "typed": 0.0016368899999999998,
+      "computed": 0.0016368899999999998,
+      "learned": 0.0016368899999999998,
+      "identifier": 0.0016368899999999998,
+      "product": 0.0016368899999999998,
+      "minmax": 0.0016368899999999998,
+      "hybrid": 0.0016368899999999998,
+      "four": 0.0016368899999999998,
+      "fuzzy": 0.0,
+      "passage": 0.0,
+      "voyage": 0.0016368899999999998,
+      "bm25": 0.0,
+      "voyage-rerank": 6.34663689
     },
     "excludes": [
       "Turbopuffer database/storage/query charges",
