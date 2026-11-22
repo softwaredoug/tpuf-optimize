@@ -85,7 +85,7 @@ on the same new 5,000-query Referee split.
 Every timing and submitted top 10 comes from the same independent execution.
 Prior holdout scores and the incomplete shared-retrieval run are not included.
 The Pareto charts use full-split NDCG; pending variants are not plotted. The
-cost column estimates external embedding/reranker inference per user query;
+cost column estimates external embedding/reranker inference per 5,000-query run;
 Turbopuffer database charges are excluded.
 
 <!-- esci-benchmark:start -->
@@ -94,6 +94,7 @@ Scored variants used the same 5,000 Referee queries. The second NDCG column cove
 
 | Variant | NDCG@10 (full) | NDCG@10 (disjoint) | p50 (ms) | p95 (ms) | Cost* (USD/5,000 queries) | Commit |
 |---|---:|---:|---:|---:|---:|---|
+| [Voyage rerank-3 over ANN + BM25](https://github.com/softwaredoug/tpuf-optimize/tree/experiment/tpuf-native-rerankers) | 0.45677 | 0.45620 | 240.07 | 381.75 | $6.346637* | [`0a5816e`](https://github.com/softwaredoug/tpuf-optimize/commit/0a5816e) |
 | [Typed + computed reranker](https://github.com/softwaredoug/tpuf-optimize/tree/innovate-typed-computed-ltr) | 0.41825 | 0.41771 | 180.22 | 215.46 | $0.001637* | [`6508e87`](https://github.com/softwaredoug/tpuf-optimize/commit/6508e87) |
 | [Computed-feature reranker](https://github.com/softwaredoug/tpuf-optimize/tree/innovate-computed-ltr-features) | 0.41405 | 0.41329 | 179.54 | 252.30 | $0.001637* | [`e64100d`](https://github.com/softwaredoug/tpuf-optimize/commit/e64100d) |
 | [Learned pairwise reranker](https://github.com/softwaredoug/tpuf-optimize/tree/research/learned-rank) | 0.40582 | 0.40517 | 110.94 | 206.48 | $0.001637* | [`adf9768`](https://github.com/softwaredoug/tpuf-optimize/commit/adf9768) |
@@ -107,7 +108,7 @@ Scored variants used the same 5,000 Referee queries. The second NDCG column cove
 | [Baseline: Voyage-4 ANN (Turbopuffer)](https://github.com/softwaredoug/tpuf-optimize/tree/experiment-6-hybrid-rrf) | 0.36286 | 0.36236 | 97.85 | 124.41 | $0.001637* | [`cc5fc8a`](https://github.com/softwaredoug/tpuf-optimize/commit/cc5fc8a) |
 | [Baseline: weighted title/description BM25](https://github.com/softwaredoug/tpuf-optimize/tree/main) | 0.31331 | 0.31266 | 59.76 | 72.38 | $0.000000* | [`1768df7`](https://github.com/softwaredoug/tpuf-optimize/commit/1768df7) |
 
-*Estimated external model inference per 5,000-query run. Voyage-4 query embedding uses a UTF-8-bytes/4 token proxy (0.06 USD/million tokens); lexical-only and local CPU rankers add no model inference charge. Excludes Turbopuffer database/query charges and index-time embedding.
+*Estimated external model inference per 5,000-query run. Voyage-4 query embedding uses a UTF-8-bytes/4 token proxy (0.06 USD/million tokens); lexical-only and local CPU rankers add no model inference charge. Excludes Turbopuffer database/query charges and index-time embedding. Voyage rerank-3 uses $0.05/M and a 25,380-token-per-query training proxy.
 
 ![ESCI NDCG@10 versus p50 latency](assets/esci-pareto-p50.svg)
 
