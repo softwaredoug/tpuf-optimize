@@ -230,6 +230,21 @@ class TPufStrategyTests(unittest.TestCase):
 
         self.assertGreater(exact, partial)
 
+    def test_cross_field_coverage_rewards_split_query_terms(self) -> None:
+        split = self.strategy.lexical_cross_field_coverage(
+            "north star shoe", "Running shoe", None, "North Star",
+        )
+        single_field = self.strategy.lexical_cross_field_coverage(
+            "north star shoe", "North Star Running Shoe", None, "North Star",
+        )
+        incomplete = self.strategy.lexical_cross_field_coverage(
+            "north star shoe", "Running shoe", None, "Other Brand",
+        )
+
+        self.assertAlmostEqual(split, 1 / 3)
+        self.assertEqual(single_field, 0.0)
+        self.assertEqual(incomplete, 0.0)
+
     def test_lexical_rerank_is_bounded_and_stable_for_missing_fields(self) -> None:
         rows = [
             cast(Row, {"id": "first"}),
@@ -315,6 +330,7 @@ class TPufStrategyTests(unittest.TestCase):
             batch_size=16,
             lexical_candidate_fusion=True,
             lexical_rerank=True,
+            lexical_cross_field_boost=0.03,
         )
         results = list(
             searcher.search(

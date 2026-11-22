@@ -31,4 +31,10 @@ The passage-fold arm added `+0.003112` over union+position on training
 holdout tasks. The final stacked candidate improved `+0.018680` over the
 matched training baseline and `+0.017423` over the matched holdout baseline.
 
+A bounded cross-field coverage boost of `0.03` further improved the stack by
+`+0.000209` on the disjoint training fold (paired bootstrap 95% CI:
+`[+0.000023, +0.000527]`) and by `+0.000158` on matched holdout tasks. It
+rewards terms split across title/description/brand only beyond the best single
+field's coverage. Holdout results are aggregate-only.
+
 No latency benchmark was performed. Phrase filters may add query latency.

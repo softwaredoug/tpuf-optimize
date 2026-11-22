@@ -97,6 +97,12 @@ def _parser() -> argparse.ArgumentParser:
         help="maximum normalized score adjustment (0 through 1)",
     )
     parser.add_argument(
+        "--lexical-cross-field-boost",
+        type=float,
+        default=0.0,
+        help="additional bounded boost for query terms split across text fields",
+    )
+    parser.add_argument(
         "--field-fusion",
         choices=("none", *TPufStrategy.FIELD_FUSION_CHANNELS),
         default="none",
@@ -114,6 +120,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--batch-size must be greater than zero")
     if not 0.0 <= args.lexical_rerank_boost <= 1.0:
         parser.error("--lexical-rerank-boost must be between 0 and 1")
+    if not 0.0 <= args.lexical_cross_field_boost <= 1.0:
+        parser.error("--lexical-cross-field-boost must be between 0 and 1")
     if not os.environ.get("TURBOPUFFER_API_KEY"):
         parser.error("Set TURBOPUFFER_API_KEY before querying.")
 
@@ -128,6 +136,7 @@ def main(argv: list[str] | None = None) -> int:
                 lexical_candidate_fusion=args.lexical_candidate_fusion,
                 lexical_rerank=args.lexical_rerank,
                 lexical_rerank_boost=args.lexical_rerank_boost,
+                lexical_cross_field_boost=args.lexical_cross_field_boost,
             )
             _write_results(
                 args.output,

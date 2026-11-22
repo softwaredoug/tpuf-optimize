@@ -556,15 +556,41 @@ class TPufStrategy:
         ) / available_weight
 
     @classmethod
+    def lexical_cross_field_coverage(
+        cls, query_text: str, title: str | None, description: str | None,
+        brand: str | None,
+    ) -> float:
+        """Measure query terms split across fields beyond the best single field."""
+        query_terms = set(cls._position_tokens(query_text))
+        if not query_terms:
+            return 0.0
+        field_terms = [
+            set(cls._position_tokens(text))
+            for text in (title, description, brand)
+            if text
+        ]
+        if not field_terms:
+            return 0.0
+        union = set().union(*field_terms)
+        union_coverage = len(query_terms & union) / len(query_terms)
+        best_single_coverage = max(
+            len(query_terms & terms) / len(query_terms) for terms in field_terms
+        )
+        return max(0.0, union_coverage - best_single_coverage)
+
+    @classmethod
     def rerank_lexically(
         cls,
         query_text: str,
         rows: list[Row],
         max_boost: float = LEXICAL_RERANK_MAX_BOOST,
+        cross_field_boost: float = 0.0,
     ) -> list[Row]:
-        """Make a bounded, stable adjustment to the existing lexical ranking."""
+        """Apply bounded position and optional cross-field lexical adjustments."""
         if not 0.0 <= max_boost <= 1.0:
             raise ValueError("max_boost must be between 0 and 1")
+        if not 0.0 <= cross_field_boost <= 1.0:
+            raise ValueError("cross_field_boost must be between 0 and 1")
         if len(rows) < 2:
             return rows
         denominator = max(len(rows) - 1, 1)
@@ -576,15 +602,26 @@ class TPufStrategy:
                 if isinstance(row, dict)
                 else cast(dict[str, object], row.model_dump())
             )
+            title = cast(str | None, attributes.get("title"))
+            description = cast(str | None, attributes.get("description"))
+            brand = cast(str | None, attributes.get("brand"))
             score = cls.lexical_position_score(
                 query_text,
-                cast(str | None, attributes.get("title")),
-                cast(str | None, attributes.get("description")),
-                cast(str | None, attributes.get("brand")),
+                title,
+                description,
+                brand,
+            )
+            cross_field_score = (
+                cls.lexical_cross_field_coverage(
+                    query_text, title, description, brand
+                )
+                if cross_field_boost
+                else 0.0
             )
             parent_utility = 1.0 - (original_rank / denominator)
             return (
-                parent_utility + max_boost * score,
+                parent_utility + max_boost * score
+                + cross_field_boost * cross_field_score,
                 -original_rank,
             )
 
