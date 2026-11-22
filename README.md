@@ -79,8 +79,9 @@ is amortized time, not individual response latency. `--resume` continues
 the same run after interruption; use a fresh database for every new run or
 variant. Turbopuffer's internal caching is outside this tool's control.
 
-The final benchmark runs ten leaders selected from prior holdout results and
-two baselines, one variant at a time, on a new 5,000-query Referee split.
+The final benchmark runs ten leaders selected from prior holdout results,
+two baselines, and the accepted Voyage rerank-3 variant, one variant at a time,
+on the same new 5,000-query Referee split.
 Every timing and submitted top 10 comes from the same independent execution.
 Prior holdout scores and the incomplete shared-retrieval run are not included.
 The Pareto charts use full-split NDCG; pending variants are not plotted. The
@@ -118,8 +119,8 @@ Refresh the table and both Pareto charts from the aggregate-only JSON with
 `uv run python scripts/render_esci_benchmark.py`.
 
 For context, the separate 1,000-query training-only native reranker experiment
-estimated 25.38M input-token proxy tokens. Linear scaling to 5,000 queries
-would be about `$12.69` for Cohere rerank-v3.5 and `$6.35` for Voyage
-rerank-3. These are training-set estimates, not scores in the 5,000-query
-leaderboard; the rerank API does not return model token usage or per-request
-cost.
+estimated 25.38M rerank-input tokens by a chars/4 proxy. At $0.05/M, linear
+scaling to 5,000 queries estimates `$6.35` for Voyage rerank-3; its leaderboard
+cost cell also includes the small Voyage-4 query-embedding estimate. Cohere's
+training-only estimate was `$12.69` per 5,000 queries. The rerank API does not
+return model token usage or per-request cost.

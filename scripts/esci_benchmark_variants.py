@@ -20,6 +20,8 @@ class Variant:
     branch: str
     historical_ndcg: float
     uses_voyage4_query_embedding: bool
+    rerank_model: str | None = None
+    rerank_tokens_proxy_per_query: float = 0.0
 
 
 # Previous holdout scores are selection evidence, not scores on the new split.
@@ -59,7 +61,22 @@ VARIANTS = (
         "bm25", "Baseline: weighted title/description BM25", "1768df7",
         "main", .32220, False,
     ),
+    Variant(
+        "voyage-rerank",
+        "Voyage rerank-3 over ANN + BM25",
+        "0a5816e",
+        "experiment/tpuf-native-rerankers",
+        .45505,
+        True,
+        "voyage/rerank-3",
+        25_380,
+    ),
 )
+
+MODEL_RERANK_PRICES_USD_PER_MILLION = {
+    "cohere/rerank-v3.5": 0.10,
+    "voyage/rerank-3": 0.05,
+}
 
 
 def source(revision, path):
@@ -90,6 +107,10 @@ class FrozenSearcher(Searcher):
         self.slug = slug = variant.slug
         rev = variant.revision
         self.direct = slug in {"voyage", "bm25", "fuzzy", "passage"}
+        if slug == "voyage-rerank":
+            self.native_rerank = load(rev, "native_rerank")
+            self.frozen = load("cc5fc8a", "strategy").TPufStrategy()
+            return
         if self.direct or slug in {"hybrid", "four"}:
             self.frozen = load(rev, "strategy").TPufStrategy()
             return
@@ -160,6 +181,20 @@ class FrozenSearcher(Searcher):
         [request] = requests
         text, locale = request.text, request.locale
         slug = self.slug
+        if slug == "voyage-rerank":
+            queries = self.native_rerank.candidate_queries(
+                self.frozen, text, locale
+            )
+            response = self.namespace.multi_query(
+                queries=queries,
+                rerank_by=self.native_rerank.native_rerank_by(
+                    "voyage/rerank-3", text
+                ),
+                limit=top_k,
+            )
+            if len(response.results) != 1:
+                raise ValueError("Voyage reranker returned an incomplete result.")
+            return [(response.results[0].rows or [])[:top_k]]
         if self.direct:
             if slug == "voyage":
                 ann_query = self.frozen.hybrid_queries(text, locale, top_k)[0]

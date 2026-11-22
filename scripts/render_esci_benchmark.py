@@ -62,6 +62,19 @@ def render_block(aggregate, assets):
         )
     if costs:
         cost_method = aggregate.get("cost_estimates", {})
+        rerank_rate = cost_method.get(
+            "native_rerank_prices_usd_per_million_tokens", {}
+        ).get("voyage/rerank-3")
+        rerank_proxy = cost_method.get(
+            "native_rerank_token_proxy_per_query"
+        )
+        rerank_note = (
+            f" Voyage rerank-3 uses ${rerank_rate:g}/M and a "
+            f"{rerank_proxy:,.0f}-token-per-query training proxy."
+            if isinstance(rerank_rate, (int, float))
+            and isinstance(rerank_proxy, (int, float))
+            else ""
+        )
         lines.extend([
             "",
             (
@@ -71,7 +84,7 @@ def render_block(aggregate, assets):
                 f"({cost_method.get('voyage4_embedding_usd_per_million_tokens', 0):g} "
                 "USD/million tokens); lexical-only and local CPU rankers add no "
                 "model inference charge. Excludes Turbopuffer database/query "
-                "charges and index-time embedding."
+                f"charges and index-time embedding.{rerank_note}"
             ),
         ])
     for percentile in ("p50", "p95"):

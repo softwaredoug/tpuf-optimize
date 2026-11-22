@@ -13,16 +13,17 @@ from tpuf_optimize.searcher import SearchRequest
 class Namespace:
     def __init__(self):
         self.calls = []
+        self.options = []
 
-    def multi_query(self, *, queries):
+    def multi_query(self, *, queries, **options):
         self.calls.append(list(queries))
-        return SimpleNamespace(results=[
-            SimpleNamespace(rows=[Row.from_dict({
+        self.options.append(options)
+        result = SimpleNamespace(rows=[Row.from_dict({
                 "id": "doc-a", "$dist": .3, "title": "blue shoe", "brand": "example",
                 "title_bm25": 2.0, "passage_bm25": 1.5, "brand_bm25": 0.0,
             })])
-            for _ in queries
-        ])
+        count = 1 if "rerank_by" in options else len(queries)
+        return SimpleNamespace(results=[result for _ in range(count)])
 
 
 class FrozenVariantTests(unittest.TestCase):
@@ -43,3 +44,16 @@ class FrozenVariantTests(unittest.TestCase):
                     rank_by = namespace.calls[0][0]["rank_by"]
                     self.assertEqual(rank_by[0], "passage__embed__voyage_4")
                     self.assertEqual(rank_by[1], "ANN")
+                if variant.slug == "voyage-rerank":
+                    self.assertEqual(
+                        namespace.options[0]["rerank_by"]["model"],
+                        "voyage/rerank-3",
+                    )
+                    self.assertEqual(
+                        namespace.options[0]["rerank_by"]["attribute"], "passage"
+                    )
+                    self.assertEqual(namespace.options[0]["limit"], 10)
+                    self.assertTrue(all(
+                        "passage" in query["include_attributes"]
+                        for query in namespace.calls[0]
+                    ))

@@ -17,13 +17,18 @@ from pathlib import Path
 
 from turbopuffer import Turbopuffer
 
-from esci_benchmark_variants import VARIANTS, FrozenSearcher
+from esci_benchmark_variants import (
+    MODEL_RERANK_PRICES_USD_PER_MILLION,
+    VARIANTS,
+    FrozenSearcher,
+)
 from tpuf_optimize.benchmark import run_benchmark
 from tpuf_optimize.query_batch import _ranked_rows
 from tpuf_optimize.searcher import SearchRequest
 
 COUNT = 5000
 VOYAGE4_EMBED_USD_PER_MILLION = 0.06
+NATIVE_RERANK_TOKEN_PROXY_PER_QUERY = 25_380
 ALIASES = {"en-us": "us", "es-es": "es", "ja-jp": "jp"}
 
 
@@ -202,10 +207,22 @@ def run(args, state):
         ),
         "voyage4_embedding_usd_per_query": voyage4_embed_usd_per_query,
         "voyage4_embedding_usd_total": voyage4_embed_usd_per_query * COUNT,
+        "native_rerank_token_proxy_per_query": (
+            NATIVE_RERANK_TOKEN_PROXY_PER_QUERY
+        ),
+        "native_rerank_prices_usd_per_million_tokens": {
+            "cohere/rerank-v3.5": 0.10,
+            "voyage/rerank-3": 0.05,
+        },
         "variant_cost_per_query_usd": {
             variant.slug: (
                 voyage4_embed_usd_per_query
                 if variant.uses_voyage4_query_embedding else 0.0
+            ) + (
+                variant.rerank_tokens_proxy_per_query
+                * MODEL_RERANK_PRICES_USD_PER_MILLION[variant.rerank_model]
+                / 1_000_000
+                if variant.rerank_model else 0.0
             )
             for variant in VARIANTS
         },
@@ -213,6 +230,12 @@ def run(args, state):
             variant.slug: (
                 voyage4_embed_usd_per_query * COUNT
                 if variant.uses_voyage4_query_embedding else 0.0
+            ) + (
+                variant.rerank_tokens_proxy_per_query
+                * MODEL_RERANK_PRICES_USD_PER_MILLION[variant.rerank_model]
+                / 1_000_000
+                * COUNT
+                if variant.rerank_model else 0.0
             )
             for variant in VARIANTS
         },
@@ -222,11 +245,18 @@ def run(args, state):
         ],
     }
     previous_costs = summary.get("cost_estimates", {})
-    if any(
-        key not in cost_estimates or cost_estimates[key] != value
-        for key, value in previous_costs.items()
-    ):
-        raise ValueError("Benchmark cost-estimate basis changed")
+    per_variant_cost_keys = {
+        "variant_cost_per_query_usd",
+        "variant_cost_per_run_usd",
+    }
+    for key, value in previous_costs.items():
+        if key not in cost_estimates:
+            raise ValueError("Benchmark cost-estimate basis changed")
+        if key in per_variant_cost_keys:
+            if any(cost_estimates[key].get(slug) != amount for slug, amount in value.items()):
+                raise ValueError("Benchmark cost-estimate basis changed")
+        elif cost_estimates[key] != value:
+            raise ValueError("Benchmark cost-estimate basis changed")
     summary["cost_estimates"] = cost_estimates
     if any(summary[field] != value for field, value in cohort.items()):
         raise ValueError("Benchmark configuration changed")
