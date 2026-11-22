@@ -197,6 +197,55 @@ class TPufStrategyTests(unittest.TestCase):
         )
         self.assertEqual(self.strategy.pretokenize("青い靴"), ["青", "い", "靴"])
 
+    def test_position_score_prefers_title_phrase_and_order(self) -> None:
+        exact = self.strategy.lexical_position_score(
+            "blue running shoe",
+            "Blue Running Shoe",
+            "A comfortable everyday product",
+            None,
+        )
+        scattered = self.strategy.lexical_position_score(
+            "blue running shoe",
+            "Shoe for running, color blue",
+            "A comfortable everyday product",
+            None,
+        )
+
+        self.assertGreater(exact, scattered)
+
+    def test_position_score_handles_japanese_text(self) -> None:
+        exact = self.strategy.lexical_position_score("青い靴", "青い靴", None, None)
+        partial = self.strategy.lexical_position_score("青い靴", "青い", None, None)
+
+        self.assertGreater(exact, partial)
+
+    def test_lexical_rerank_is_bounded_and_stable_for_missing_fields(self) -> None:
+        rows = [
+            cast(Row, {"id": "first"}),
+            cast(Row, {"id": "second"}),
+            cast(Row, {"id": "third"}),
+        ]
+
+        self.assertEqual(
+            [row["id"] for row in self.strategy.rerank_lexically("blue shoe", rows)],
+            ["first", "second", "third"],
+        )
+
+    def test_lexical_rerank_uses_only_returned_lexical_attributes(self) -> None:
+        rows = [
+            cast(Row, {"id": "no-match", "title": "Red jacket"}),
+            cast(Row, {"id": "phrase", "title": "Blue running shoe"}),
+            *[cast(Row, {"id": f"other-{index}"}) for index in range(8)],
+        ]
+
+        ranked = self.strategy.rerank_lexically("blue running shoe", rows)
+
+        self.assertEqual(ranked[0]["id"], "phrase")
+
+    def test_lexical_rerank_rejects_unbounded_boost(self) -> None:
+        with self.assertRaises(ValueError):
+            self.strategy.rerank_lexically("blue shoe", [], max_boost=1.01)
+
 
 if __name__ == "__main__":
     unittest.main()

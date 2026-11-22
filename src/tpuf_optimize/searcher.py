@@ -40,6 +40,8 @@ class Searcher:
         strategy: TPufStrategy,
         batch_size: int = 16,
         lexical_candidate_fusion: bool = False,
+        lexical_rerank: bool = False,
+        lexical_rerank_boost: float = TPufStrategy.LEXICAL_RERANK_MAX_BOOST,
     ) -> None:
         if batch_size < 1:
             raise ValueError("batch_size must be greater than zero")
@@ -52,6 +54,8 @@ class Searcher:
             "zero_result_arms": 0,
             "union_candidates": 0,
         }
+        self.lexical_rerank = lexical_rerank
+        self.lexical_rerank_boost = lexical_rerank_boost
 
     def search(
         self, requests: Iterable[SearchRequest], top_k: int
@@ -63,20 +67,27 @@ class Searcher:
         while request_batch := list(
             itertools.islice(iterator, request_batch_size)
         ):
+            candidate_depth = 50 if (
+                self.lexical_candidate_fusion or self.lexical_rerank
+            ) else top_k
             if self.lexical_candidate_fusion:
                 queries = [
                     query
                     for request in request_batch
                     for query in (
-                        self.strategy.query(request.text, request.locale, 50),
+                        self.strategy.query(
+                            request.text, request.locale, candidate_depth
+                        ),
                         *self.strategy.lexical_candidate_queries(
-                            request.text, request.locale, 50
+                            request.text, request.locale, candidate_depth
                         ),
                     )
                 ]
             else:
                 queries = [
-                    self.strategy.query(request.text, request.locale, top_k)
+                    self.strategy.query(
+                        request.text, request.locale, candidate_depth
+                    )
                     for request in request_batch
                 ]
             response = self.namespace.multi_query(queries=queries)
@@ -95,10 +106,20 @@ class Searcher:
                     )
                     fused_rows = self._reciprocal_rank_fusion(arm_rows)
                     self.lexical_stats["union_candidates"] += len(fused_rows)
-                    yield request, fused_rows[:top_k]
+                    rows = fused_rows[:candidate_depth]
+                    if self.lexical_rerank:
+                        rows = self.strategy.rerank_lexically(
+                            request.text, rows, self.lexical_rerank_boost
+                        )
+                    yield request, rows[:top_k]
             else:
                 for request, result in zip(request_batch, response.results):
-                    yield request, result.rows or []
+                    rows = result.rows or []
+                    if self.lexical_rerank:
+                        rows = self.strategy.rerank_lexically(
+                            request.text, rows, self.lexical_rerank_boost
+                        )
+                    yield request, rows[:top_k]
 
     @staticmethod
     def _reciprocal_rank_fusion(arm_rows: list[list[Row]]) -> list[Row]:

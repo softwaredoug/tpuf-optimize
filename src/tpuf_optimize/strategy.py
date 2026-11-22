@@ -5,11 +5,17 @@ from __future__ import annotations
 import math
 import re
 import unicodedata
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from typing import Any, cast
 
 import pandas as pd
-from turbopuffer.types import AttributeSchemaParam, DistanceMetric, RankBy, RowParam
+from turbopuffer.types import (
+    AttributeSchemaParam,
+    DistanceMetric,
+    RankBy,
+    Row,
+    RowParam,
+)
 from turbopuffer.types.namespace_multi_query_params import Query
 
 
@@ -129,6 +135,7 @@ class TPufStrategy:
     }
     PRETOKENIZED_FIELDS = ("title", "brand", "passage")
     FUZZY_QUERY_MIN_CHARS = 6
+    LEXICAL_RERANK_MAX_BOOST = 0.18
 
     EMBEDDING_FIELDS = {
         "passage__embed__voyage_4": ("embedding__voyage_4__passage", "passage"),
@@ -358,7 +365,7 @@ class TPufStrategy:
             "rank_by": self.rank_by(query_text, locale),
             "filters": ("locale", "Eq", locale),
             "top_k": top_k,
-            "include_attributes": ["title", "description", "locale"],
+            "include_attributes": ["title", "description", "brand", "locale"],
         }
 
     def lexical_candidate_queries(
@@ -426,5 +433,147 @@ class TPufStrategy:
                 ),
             ),
             "top_k": top_k,
-            "include_attributes": ["title", "description", "locale"],
+            "include_attributes": ["title", "description", "brand", "locale"],
         }
+
+    @staticmethod
+    def _position_tokens(text: str) -> list[str]:
+        """Tokenize text consistently for a lightweight lexical reranker."""
+        normalized = unicodedata.normalize("NFKC", text).casefold()
+        return re.findall(
+            r"[^\W_]+|[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]",
+            normalized,
+            flags=re.UNICODE,
+        )
+
+    @classmethod
+    def _field_match_quality(cls, query_tokens: Sequence[str], text: str) -> float:
+        """Score query coverage, order, compactness, phrase, and early matches."""
+        if not query_tokens or not text:
+            return 0.0
+
+        field_tokens = cls._position_tokens(text)
+        if not field_tokens:
+            return 0.0
+
+        unique_query = list(dict.fromkeys(query_tokens))
+        positions = {
+            token: [index for index, value in enumerate(field_tokens) if value == token]
+            for token in unique_query
+        }
+        matched = [token for token in unique_query if positions[token]]
+        coverage = len(matched) / len(unique_query)
+
+        # Count query terms encountered in their original order. Unmatched terms
+        # are skipped, so partial coverage still receives proportional credit.
+        ordered_count = 0
+        cursor = 0
+        for token in query_tokens:
+            try:
+                cursor = field_tokens.index(token, cursor) + 1
+            except ValueError:
+                continue
+            ordered_count += 1
+        ordered = ordered_count / len(query_tokens)
+
+        # Find the narrowest field-token window containing all distinct terms
+        # that occur in the field; scale by coverage when some terms are absent.
+        located = sorted(
+            (position, token)
+            for token in matched
+            for position in positions[token]
+        )
+        left = 0
+        found: dict[str, int] = {}
+        compactness = 0.0
+        for right, (position, token) in enumerate(located):
+            found[token] = found.get(token, 0) + 1
+            while len(found) == len(matched) and left <= right:
+                width = position - located[left][0] + 1
+                compactness = max(compactness, len(matched) / width)
+                left_token = located[left][1]
+                found[left_token] -= 1
+                if not found[left_token]:
+                    del found[left_token]
+                left += 1
+        compactness *= coverage
+
+        earliest = min((positions[token][0] for token in matched), default=0)
+        early = (
+            1.0 - earliest / max(len(field_tokens), 1)
+            if matched
+            else 0.0
+        )
+        normalized_text = " ".join(field_tokens)
+        phrase = " ".join(query_tokens) in normalized_text
+
+        return (
+            0.52 * coverage
+            + 0.16 * ordered
+            + 0.13 * compactness
+            + 0.11 * early
+            + 0.08 * float(phrase)
+        )
+
+    @classmethod
+    def lexical_position_score(
+        cls, query_text: str, title: str | None, description: str | None,
+        brand: str | None,
+    ) -> float:
+        """Return a bounded lexical feature score; absent fields are neutral."""
+        query_tokens = cls._position_tokens(query_text)
+        if not query_tokens:
+            return 0.0
+        fields = [
+            (title, 0.70),
+            (description, 0.22),
+            (brand, 0.08),
+        ]
+        available_weight = sum(weight for text, weight in fields if text)
+        if not available_weight:
+            return 0.0
+        return sum(
+            weight * cls._field_match_quality(query_tokens, text)
+            for text, weight in fields
+            if text
+        ) / available_weight
+
+    @classmethod
+    def rerank_lexically(
+        cls,
+        query_text: str,
+        rows: list[Row],
+        max_boost: float = LEXICAL_RERANK_MAX_BOOST,
+    ) -> list[Row]:
+        """Make a bounded, stable adjustment to the existing lexical ranking."""
+        if not 0.0 <= max_boost <= 1.0:
+            raise ValueError("max_boost must be between 0 and 1")
+        if len(rows) < 2:
+            return rows
+        denominator = max(len(rows) - 1, 1)
+
+        def adjusted(item: tuple[int, Row]) -> tuple[float, int]:
+            original_rank, row = item
+            attributes = (
+                cast(dict[str, object], row)
+                if isinstance(row, dict)
+                else cast(dict[str, object], row.model_dump())
+            )
+            score = cls.lexical_position_score(
+                query_text,
+                cast(str | None, attributes.get("title")),
+                cast(str | None, attributes.get("description")),
+                cast(str | None, attributes.get("brand")),
+            )
+            parent_utility = 1.0 - (original_rank / denominator)
+            return (
+                parent_utility + max_boost * score,
+                -original_rank,
+            )
+
+        return [
+            row
+            for _rank, row in sorted(
+                enumerate(rows), key=adjusted, reverse=True
+            )
+        ]
