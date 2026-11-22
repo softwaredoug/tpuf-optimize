@@ -20,3 +20,9 @@ unchanged `c46c935` lexical baseline.
 The selected fixed candidate adds `passage__word_v4__fold` BM25 at weight
 `0.5` to the original lexical ranking. It does not change indexing, use
 embeddings, or use a reranker.
+
+## Holdout confirmation
+
+The orchestrator reports matched holdout NDCG@10 of `0.364953` for baseline
+and `0.367718` for this candidate, a delta of `+0.002765`. The candidate was
+accepted. Only aggregate metrics are recorded.
