@@ -182,6 +182,22 @@ When responding, you can tell the overall metric delta, but NEVER SPECIFIC QUERI
 
 The batch query runner should generate CSVs conforming to referee's exected format of search results.
 
+## Classes of experiments
+
+There are many types of retrieval experiments, using completely different types of technical 
+approaches. They tend to exist on different points in latency / cost vs relevance pareto.
+
+They are
+
+- **Lexical** — BM25 and other lexical matching only.
+- **Hybrid** — combines lexical + embedding retrieval/fusion, including rule-based reranking over those candidates.
+- **LTR** — classic ML reranker using query-dependent, query, and document features.
+- **Third-party reranker** — hosted reranking model such as Voyage rerank-3.
+- **Embedding** — pure embedding retrieval; listed separately from hybrid.
+
+We're trying to find the best candidate in each category. So our overall leaderboard in README.md captures
+a swath of all these groups. Not just "top 10 NDCG"
+
 ## Agent experiments vs non agent
 
 * The `main` branch exists as the baseline for experimenting with turbopuffer directly
