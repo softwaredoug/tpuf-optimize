@@ -27,6 +27,7 @@ class TPufStrategy:
     FUZZY_BRAND_WEIGHT = 0.15
     FIELD_FUSION_CHANNELS = {
         "passage_fold": (("passage__word_v4__fold", 0.5),),
+        "brand_whitespace": (("brand__whitespace__default", 0.5),),
     }
 
     def __init__(self, field_fusion: str = "none") -> None:

@@ -195,9 +195,15 @@ class TPufStrategyTests(unittest.TestCase):
         passage_fold = str(
             TPufStrategy(field_fusion="passage_fold").rank_by("blue shoe", "us")
         )
+        brand_whitespace = str(
+            TPufStrategy(field_fusion="brand_whitespace").rank_by(
+                "blue shoe", "us"
+            )
+        )
 
         self.assertNotIn("passage__word_v4__fold", baseline)
         self.assertIn("passage__word_v4__fold", passage_fold)
+        self.assertIn("brand__whitespace__default", brand_whitespace)
         with self.assertRaises(ValueError):
             TPufStrategy(field_fusion="unknown")
 
