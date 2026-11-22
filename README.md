@@ -118,7 +118,8 @@ Refresh the table and both Pareto charts from the aggregate-only JSON with
 `uv run python scripts/render_esci_benchmark.py`.
 
 For context, the separate 1,000-query training-only native reranker experiment
-estimated about `$0.00254/query` for Cohere rerank-v3.5 and `$0.00127/query`
-for Voyage rerank-3 (25.38M input-token proxy total, divided by 1,000 queries).
-These are training-set estimates, not rows in the 5,000-query leaderboard; the
-rerank API does not return model token usage or per-request cost.
+estimated 25.38M input-token proxy tokens. Linear scaling to 5,000 queries
+would be about `$12.69` for Cohere rerank-v3.5 and `$6.35` for Voyage
+rerank-3. These are training-set estimates, not scores in the 5,000-query
+leaderboard; the rerank API does not return model token usage or per-request
+cost.
