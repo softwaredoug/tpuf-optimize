@@ -100,6 +100,13 @@ def render_block(aggregate, assets):
                 "model inference charge. Excludes Turbopuffer database/query "
                 f"charges and index-time embedding.{rerank_note}"
             ),
+            "",
+            "- **Lexical** — BM25 and other lexical matching only.",
+            "- **Hybrid** — combines lexical and embedding retrieval, such as RRF.",
+            "- **Learned reranker** — locally trained model using retrieval/index features.",
+            "- **Third-party reranker** — hosted reranking model such as Voyage rerank-3.",
+            "- **Embedding** — pure embedding retrieval; listed separately from hybrid.",
+            "- **Handcrafted reranker** — fixed product-evidence rules, not a trained model.",
         ])
     for percentile in ("p50", "p95"):
         points = [
