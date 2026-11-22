@@ -72,49 +72,53 @@ def render_block(aggregate, assets, fresh_lexical=None):
         key=lambda v: scores.get(v.slug, {}).get("ndcg_at_10", -1),
         reverse=True,
     )
-    for variant in ordered:
-        result = scores.get(variant.slug)
-        if result is not None and not result["commit"].startswith(variant.revision):
-            raise ValueError("Aggregate revision does not match the pinned variant")
-        values = (
-            ("Pending", "—", "—", "—") if result is None else
-            (f"{result['ndcg_at_10']:.5f}", f"{result['disjoint_ndcg_at_10']:.5f}",
-             f"{result['p50_ms']:.2f}", f"{result['p95_ms']:.2f}")
-        )
-        estimated_cost = costs.get(variant.slug)
-        cost_cell = (
-            "—" if estimated_cost is None else f"${float(estimated_cost):.6f}*"
-        )
-        commit_url = f"https://github.com/softwaredoug/tpuf-optimize/commit/{variant.revision}"
-        branch_url = f"https://github.com/softwaredoug/tpuf-optimize/tree/{variant.branch}"
-        lines.append(
-            f"| [{variant.name}]({branch_url}) | "
-            "Historical leaderboard | "
-            f"{CATEGORY_LABELS.get(variant.category, variant.category)} | "
-            f"{' | '.join(values)} | {cost_cell} | "
-            f"[`{variant.revision}`]({commit_url}) |"
-        )
     fresh_ordered = sorted(
         (variant for variant in VARIANTS if variant.slug in fresh_scores),
         key=lambda variant: fresh_scores[variant.slug]["ndcg_at_10"],
         reverse=True,
     )
+    table_rows = []
+    for variant in ordered:
+        result = scores[variant.slug]
+        if not result["commit"].startswith(variant.revision):
+            raise ValueError("Aggregate revision does not match the pinned variant")
+        table_rows.append((
+            float(result["ndcg_at_10"]),
+            variant,
+            "Historical leaderboard",
+            result,
+            costs.get(variant.slug),
+        ))
     for variant in fresh_ordered:
         result = fresh_scores[variant.slug]
         if not result["commit"].startswith(variant.revision):
             raise ValueError("Fresh lexical aggregate revision does not match")
+        table_rows.append((
+            float(result["ndcg_at_10"]),
+            variant,
+            "Fresh lexical",
+            result,
+            0.0,
+        ))
+    for _ndcg, variant, cohort, result, estimated_cost in sorted(
+        table_rows,
+        key=lambda row: (-row[0], row[2], row[1].name),
+    ):
         values = (
             f"{result['ndcg_at_10']:.5f}",
             f"{result['disjoint_ndcg_at_10']:.5f}",
             f"{result['p50_ms']:.2f}",
             f"{result['p95_ms']:.2f}",
         )
+        cost_cell = (
+            "—" if estimated_cost is None else f"${float(estimated_cost):.6f}*"
+        )
         branch_url = f"https://github.com/softwaredoug/tpuf-optimize/tree/{variant.branch}"
         commit_url = f"https://github.com/softwaredoug/tpuf-optimize/commit/{variant.revision}"
         lines.append(
-            f"| [{variant.name}]({branch_url}) | Fresh lexical | "
+            f"| [{variant.name}]({branch_url}) | {cohort} | "
             f"{CATEGORY_LABELS.get(variant.category, variant.category)} | "
-            f"{' | '.join(values)} | $0.000000* | "
+            f"{' | '.join(values)} | {cost_cell} | "
             f"[`{variant.revision}`]({commit_url}) |"
         )
     if costs:
