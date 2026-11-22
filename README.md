@@ -112,11 +112,10 @@ Classes: lexical; hybrid (lexical + embedding, including rule-based reranking on
 *Estimated external model inference per 5,000-query run. Voyage-4 query embedding uses a UTF-8-bytes/4 token proxy (0.06 USD/million tokens); lexical-only and local CPU rankers add no model inference charge. Excludes Turbopuffer database/query charges and index-time embedding. Voyage rerank-3 uses $0.05/M and a 25,380-token-per-query training proxy.
 
 - **Lexical** — BM25 and other lexical matching only.
-- **Hybrid** — combines lexical and embedding retrieval, such as RRF.
-- **Learned reranker** — locally trained model using retrieval/index features.
+- **Hybrid** — combines lexical + embedding retrieval/fusion, including rule-based reranking over those candidates.
+- **LTR** — classic ML reranker using query-dependent, query, and document features.
 - **Third-party reranker** — hosted reranking model such as Voyage rerank-3.
 - **Embedding** — pure embedding retrieval; listed separately from hybrid.
-- **Handcrafted reranker** — fixed product-evidence rules, not a trained model.
 
 ![ESCI NDCG@10 versus p50 latency](assets/esci-pareto-p50.svg)
 
