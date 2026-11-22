@@ -103,6 +103,12 @@ def _parser() -> argparse.ArgumentParser:
         help="additional bounded boost for query terms split across text fields",
     )
     parser.add_argument(
+        "--lexical-position-aggregation",
+        choices=TPufStrategy.LEXICAL_POSITION_AGGREGATIONS,
+        default="weighted_mean",
+        help="aggregate per-field lexical position evidence with a weighted mean or RMS",
+    )
+    parser.add_argument(
         "--field-fusion",
         choices=("none", *TPufStrategy.FIELD_FUSION_CHANNELS),
         default="none",
@@ -137,6 +143,7 @@ def main(argv: list[str] | None = None) -> int:
                 lexical_rerank=args.lexical_rerank,
                 lexical_rerank_boost=args.lexical_rerank_boost,
                 lexical_cross_field_boost=args.lexical_cross_field_boost,
+                lexical_position_aggregation=args.lexical_position_aggregation,
             )
             _write_results(
                 args.output,

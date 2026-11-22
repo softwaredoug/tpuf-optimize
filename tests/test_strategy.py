@@ -243,6 +243,21 @@ class TPufStrategyTests(unittest.TestCase):
 
         self.assertGreater(exact, partial)
 
+    def test_rms_position_aggregation_emphasizes_strong_field_matches(self) -> None:
+        weighted = self.strategy.lexical_position_score(
+            "blue shoe", "Blue Shoe", "Unrelated description", None
+        )
+        rms = self.strategy.lexical_position_score(
+            "blue shoe", "Blue Shoe", "Unrelated description", None,
+            aggregation="rms",
+        )
+
+        self.assertGreater(rms, weighted)
+        with self.assertRaises(ValueError):
+            self.strategy.lexical_position_score(
+                "blue shoe", "Blue Shoe", None, None, aggregation="max"
+            )
+
     def test_cross_field_coverage_rewards_split_query_terms(self) -> None:
         split = self.strategy.lexical_cross_field_coverage(
             "north star shoe", "Running shoe", None, "North Star",
@@ -344,6 +359,7 @@ class TPufStrategyTests(unittest.TestCase):
             lexical_candidate_fusion=True,
             lexical_rerank=True,
             lexical_cross_field_boost=0.03,
+            lexical_position_aggregation="rms",
         )
         results = list(
             searcher.search(

@@ -25,6 +25,7 @@ class TPufStrategy:
     TITLE_WEIGHT = 2.0
     FUZZY_TITLE_WEIGHT = 0.35
     FUZZY_BRAND_WEIGHT = 0.15
+    LEXICAL_POSITION_AGGREGATIONS = ("weighted_mean", "rms")
     FIELD_FUSION_CHANNELS = {
         "passage_fold": (("passage__word_v4__fold", 0.5),),
         "brand_whitespace": (("brand__whitespace__default", 0.5),),
@@ -540,9 +541,14 @@ class TPufStrategy:
     @classmethod
     def lexical_position_score(
         cls, query_text: str, title: str | None, description: str | None,
-        brand: str | None,
+        brand: str | None, aggregation: str = "weighted_mean",
     ) -> float:
         """Return a bounded lexical feature score; absent fields are neutral."""
+        if aggregation not in cls.LEXICAL_POSITION_AGGREGATIONS:
+            raise ValueError(
+                f"Unknown lexical position aggregation {aggregation!r}; expected "
+                f"one of {', '.join(cls.LEXICAL_POSITION_AGGREGATIONS)}"
+            )
         query_tokens = cls._position_tokens(query_text)
         if not query_tokens:
             return 0.0
@@ -554,6 +560,16 @@ class TPufStrategy:
         available_weight = sum(weight for text, weight in fields if text)
         if not available_weight:
             return 0.0
+        if aggregation == "rms":
+            return math.sqrt(
+                sum(
+                    weight
+                    * cls._field_match_quality(query_tokens, text) ** 2
+                    for text, weight in fields
+                    if text
+                )
+                / available_weight
+            )
         return sum(
             weight * cls._field_match_quality(query_tokens, text)
             for text, weight in fields
@@ -590,12 +606,18 @@ class TPufStrategy:
         rows: list[Row],
         max_boost: float = LEXICAL_RERANK_MAX_BOOST,
         cross_field_boost: float = 0.0,
+        position_aggregation: str = "weighted_mean",
     ) -> list[Row]:
         """Apply bounded position and optional cross-field lexical adjustments."""
         if not 0.0 <= max_boost <= 1.0:
             raise ValueError("max_boost must be between 0 and 1")
         if not 0.0 <= cross_field_boost <= 1.0:
             raise ValueError("cross_field_boost must be between 0 and 1")
+        if position_aggregation not in cls.LEXICAL_POSITION_AGGREGATIONS:
+            raise ValueError(
+                f"Unknown lexical position aggregation {position_aggregation!r}; "
+                f"expected one of {', '.join(cls.LEXICAL_POSITION_AGGREGATIONS)}"
+            )
         if len(rows) < 2:
             return rows
         denominator = max(len(rows) - 1, 1)
@@ -615,6 +637,7 @@ class TPufStrategy:
                 title,
                 description,
                 brand,
+                position_aggregation,
             )
             cross_field_score = (
                 cls.lexical_cross_field_coverage(

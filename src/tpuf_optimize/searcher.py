@@ -43,11 +43,17 @@ class Searcher:
         lexical_rerank: bool = False,
         lexical_rerank_boost: float = TPufStrategy.LEXICAL_RERANK_MAX_BOOST,
         lexical_cross_field_boost: float = 0.0,
+        lexical_position_aggregation: str = "weighted_mean",
     ) -> None:
         if batch_size < 1:
             raise ValueError("batch_size must be greater than zero")
         if not 0.0 <= lexical_cross_field_boost <= 1.0:
             raise ValueError("lexical_cross_field_boost must be between 0 and 1")
+        if lexical_position_aggregation not in TPufStrategy.LEXICAL_POSITION_AGGREGATIONS:
+            raise ValueError(
+                "lexical_position_aggregation must be one of "
+                f"{', '.join(TPufStrategy.LEXICAL_POSITION_AGGREGATIONS)}"
+            )
         self.namespace = namespace
         self.strategy = strategy
         self.batch_size = batch_size
@@ -60,6 +66,7 @@ class Searcher:
         self.lexical_rerank = lexical_rerank
         self.lexical_rerank_boost = lexical_rerank_boost
         self.lexical_cross_field_boost = lexical_cross_field_boost
+        self.lexical_position_aggregation = lexical_position_aggregation
 
     def search(
         self, requests: Iterable[SearchRequest], top_k: int
@@ -120,6 +127,7 @@ class Searcher:
                             self.lexical_rerank_boost
                             if self.lexical_rerank else 0.0,
                             self.lexical_cross_field_boost,
+                            self.lexical_position_aggregation,
                         )
                     yield request, rows[:top_k]
             else:
@@ -132,6 +140,7 @@ class Searcher:
                             self.lexical_rerank_boost
                             if self.lexical_rerank else 0.0,
                             self.lexical_cross_field_boost,
+                            self.lexical_position_aggregation,
                         )
                     yield request, rows[:top_k]
 
