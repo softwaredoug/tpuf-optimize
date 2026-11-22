@@ -9,7 +9,7 @@ from typing import cast
 import pandas as pd
 from turbopuffer.types import Row
 
-from tpuf_optimize.searcher import Searcher
+from tpuf_optimize.searcher import SearchRequest, Searcher
 from tpuf_optimize.strategy import TPufStrategy
 
 
@@ -245,6 +245,76 @@ class TPufStrategyTests(unittest.TestCase):
     def test_lexical_rerank_rejects_unbounded_boost(self) -> None:
         with self.assertRaises(ValueError):
             self.strategy.rerank_lexically("blue shoe", [], max_boost=1.01)
+
+    def test_candidate_union_is_capped_then_position_reranked(self) -> None:
+        class FakeRow(dict[str, object]):
+            @property
+            def id(self) -> str:
+                return str(self["id"])
+
+            def model_dump(self) -> dict[str, object]:
+                return dict(self)
+
+        baseline_rows = [
+            cast(
+                Row,
+                FakeRow(
+                    id="weak",
+                    **{"$dist": 1.0},
+                    title="Red jacket",
+                    description="Outdoor apparel",
+                    brand="North Star",
+                ),
+            ),
+            cast(
+                Row,
+                FakeRow(
+                    id="exact",
+                    **{"$dist": 0.8},
+                    title="Blue running shoe",
+                    description="Everyday footwear",
+                    brand="North Star",
+                ),
+            ),
+            *[
+                cast(
+                    Row,
+                    FakeRow(id=f"other-{index}", **{"$dist": 0.5}),
+                )
+                for index in range(48)
+            ],
+        ]
+
+        class FakeNamespace:
+            def multi_query(self, *, queries):
+                self.queries = list(queries)
+                return SimpleNamespace(
+                    results=[
+                        SimpleNamespace(rows=baseline_rows),
+                        SimpleNamespace(rows=[]),
+                        SimpleNamespace(rows=[]),
+                        SimpleNamespace(rows=[]),
+                    ]
+                )
+
+        namespace = FakeNamespace()
+        searcher = Searcher(
+            namespace,
+            self.strategy,
+            batch_size=16,
+            lexical_candidate_fusion=True,
+            lexical_rerank=True,
+        )
+        results = list(
+            searcher.search(
+                [SearchRequest("q1", "blue running shoe", "us")],
+                top_k=1,
+            )
+        )
+
+        self.assertEqual(len(namespace.queries), 4)
+        self.assertEqual({query["top_k"] for query in namespace.queries}, {50})
+        self.assertEqual([row.id for row in results[0][1]], ["exact"])
 
 
 if __name__ == "__main__":
