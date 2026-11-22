@@ -87,19 +87,31 @@ def padded_range(values: list[float], minimum_span: float) -> tuple[float, float
     return low - pad, high + pad
 
 
-def render_svg(points: list[Point], pending: int, percentile: str = "p50") -> str:
+def render_svg(
+    points: list[Point],
+    pending: int,
+    percentile: str = "p50",
+    *,
+    chart_title: str | None = None,
+    x_axis_label: str | None = None,
+    x_description: str | None = None,
+    minimum_x_span: float = 1.0,
+) -> str:
+    axis_label = x_axis_label or f"End-to-end {percentile} latency (ms)"
     height = max(390, 135 + 25 * len(points))
     svg = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1060 {height}"'
         ' role="img" aria-labelledby="title desc">',
-        '<title id="title">ESCI relevance and latency Pareto frontier</title>',
-        f'<desc id="desc">{percentile} latency in milliseconds versus NDCG at 10.'
+        f'<title id="title">{escape(chart_title or "ESCI relevance vs. latency")}</title>',
+        f'<desc id="desc">{escape(x_description or f"{percentile} latency in milliseconds")} '
+        'versus NDCG at 10.'
         ' Lower latency and higher NDCG are better.</desc>',
         '<style>text{font:14px system-ui,sans-serif;fill:#172438}'
         '.small{font-size:12px;fill:#43546b}.heading{font-size:23px;'
         'font-weight:bold}.axis{stroke:#73829a}.grid{stroke:#dfe6ee}</style>',
         '<rect width="100%" height="100%" rx="12" fill="#f6f8fb"/>',
-        '<text x="32" y="40" class="heading">ESCI relevance vs. latency</text>',
+        f'<text x="32" y="40" class="heading">'
+        f'{escape(chart_title or "ESCI relevance vs. latency")}</text>',
         f'<text x="32" y="64" class="small">{len(points)} measured; '
         f'{pending} pending. Faster and more relevant is upper left.</text>',
     ]
@@ -111,7 +123,7 @@ def render_svg(points: list[Point], pending: int, percentile: str = "p50") -> st
         return "\n".join([*svg, "</svg>"]) + "\n"
 
     left, right, top, bottom = 86, 615, 94, height - 70
-    x_min, x_max = padded_range([p.latency for p in points], 1.0)
+    x_min, x_max = padded_range([p.latency for p in points], minimum_x_span)
     y_min, y_max = padded_range([p.ndcg for p in points], 0.001)
     x_min, y_min, y_max = max(0, x_min), max(0, y_min), min(1, y_max)
 
@@ -136,7 +148,7 @@ def render_svg(points: list[Point], pending: int, percentile: str = "p50") -> st
     svg.extend([
         f'<path class="axis" fill="none" d="M{left} {top}V{bottom}H{right}"/>',
         f'<text x="{(left + right) / 2}" y="{height - 19}" '
-        f'text-anchor="middle">End-to-end {percentile} latency (ms)</text>',
+        f'text-anchor="middle">{escape(axis_label)}</text>',
         f'<text transform="translate(24 {(top + bottom) / 2}) rotate(-90)" '
         'text-anchor="middle">NDCG@10</text>',
         '<text x="657" y="100">Variants · green = Pareto frontier</text>',

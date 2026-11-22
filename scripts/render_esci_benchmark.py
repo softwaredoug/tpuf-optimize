@@ -97,6 +97,38 @@ def render_block(aggregate, assets):
             render_svg(points, len(VARIANTS) - len(points), percentile), encoding="utf-8",
         )
         lines.extend(["", f"![ESCI NDCG@10 versus {percentile} latency](assets/{filename})"])
+    cost_points = [
+        Point(
+            variant.name,
+            float(costs[variant.slug]),
+            float(scores[variant.slug]["ndcg_at_10"]),
+        )
+        for variant in ordered
+        if variant.slug in scores and variant.slug in costs
+    ]
+    cost_filename = "esci-pareto-cost.svg"
+    query_count = aggregate.get("query_count", 5000)
+    (assets / cost_filename).write_text(
+        render_svg(
+            cost_points,
+            len(VARIANTS) - len(cost_points),
+            "cost",
+            chart_title="ESCI relevance vs. model inference cost",
+            x_axis_label=(
+                f"Estimated model inference cost per {query_count:,} queries (USD)"
+            ),
+            x_description="Estimated model inference cost per benchmark query set in USD",
+            minimum_x_span=0.001,
+        ),
+        encoding="utf-8",
+    )
+    lines.extend([
+        "",
+        (
+            f"![ESCI NDCG@10 versus estimated model cost per "
+            f"{query_count:,} queries](assets/{cost_filename})"
+        ),
+    ])
     return "\n".join([*lines, "", END])
 
 

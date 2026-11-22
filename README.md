@@ -114,9 +114,11 @@ Scored variants used the same 5,000 Referee queries. The second NDCG column cove
 
 ![ESCI NDCG@10 versus p95 latency](assets/esci-pareto-p95.svg)
 
+![ESCI NDCG@10 versus estimated model cost per 5,000 queries](assets/esci-pareto-cost.svg)
+
 <!-- esci-benchmark:end -->
 
-Refresh the table and both Pareto charts from the aggregate-only JSON with
+Refresh the table and all three Pareto charts from the aggregate-only JSON with
 `uv run python scripts/render_esci_benchmark.py`.
 
 For context, the separate 1,000-query training-only native reranker experiment
