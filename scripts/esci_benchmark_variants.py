@@ -47,7 +47,7 @@ VARIANTS = (
     ),
     Variant("product", "Deterministic product reranker", "7ffd772",
             "research-product-rerank", .39691, True,
-            category="Handcrafted reranker"),
+            category="Hybrid (lexical + embedding)"),
     Variant(
         "minmax", "Min-max score fusion", "41e64d4",
         "research-score-fusion", .39538, True,

@@ -92,8 +92,7 @@ Turbopuffer database charges are excluded.
 
 Scored variants used the same 5,000 Referee queries. The second NDCG column covers the 4,861 queries not found in 51 available historical task artifacts.
 
-Classes: lexical; hybrid (lexical + embedding); learned reranker; third-party reranker. Embedding-only retrieval and handcrafted reranking are shown separately because they do not fit those four.
-
+Classes: lexical; hybrid (lexical + embedding, including rule-based reranking on both); learned reranker; third-party reranker. Pure embedding retrieval is listed separately.
 | Variant | Class | NDCG@10 (full) | NDCG@10 (disjoint) | p50 (ms) | p95 (ms) | Cost* (USD/5,000 queries) | Commit |
 |---|---|---:|---:|---:|---:|---:|---|
 | [Voyage rerank-3 over ANN + BM25](https://github.com/softwaredoug/tpuf-optimize/tree/experiment/tpuf-native-rerankers) | Third-party reranker | 0.45677 | 0.45620 | 240.07 | 381.75 | $6.346637* | [`0a5816e`](https://github.com/softwaredoug/tpuf-optimize/commit/0a5816e) |
@@ -101,7 +100,7 @@ Classes: lexical; hybrid (lexical + embedding); learned reranker; third-party re
 | [Computed-feature reranker](https://github.com/softwaredoug/tpuf-optimize/tree/innovate-computed-ltr-features) | Learned reranker | 0.41405 | 0.41329 | 179.54 | 252.30 | $0.001637* | [`e64100d`](https://github.com/softwaredoug/tpuf-optimize/commit/e64100d) |
 | [Learned pairwise reranker](https://github.com/softwaredoug/tpuf-optimize/tree/research/learned-rank) | Learned reranker | 0.40582 | 0.40517 | 110.94 | 206.48 | $0.001637* | [`adf9768`](https://github.com/softwaredoug/tpuf-optimize/commit/adf9768) |
 | [Identifier-gated RRF](https://github.com/softwaredoug/tpuf-optimize/tree/confidence-aware-fusion) | Hybrid | 0.40152 | 0.40100 | 104.75 | 171.69 | $0.001637* | [`7e22661`](https://github.com/softwaredoug/tpuf-optimize/commit/7e22661) |
-| [Deterministic product reranker](https://github.com/softwaredoug/tpuf-optimize/tree/research-product-rerank) | Handcrafted reranker | 0.39209 | 0.39147 | 130.64 | 184.08 | $0.001637* | [`7ffd772`](https://github.com/softwaredoug/tpuf-optimize/commit/7ffd772) |
+| [Deterministic product reranker](https://github.com/softwaredoug/tpuf-optimize/tree/research-product-rerank) | Hybrid | 0.39209 | 0.39147 | 130.64 | 184.08 | $0.001637* | [`7ffd772`](https://github.com/softwaredoug/tpuf-optimize/commit/7ffd772) |
 | [Min-max score fusion](https://github.com/softwaredoug/tpuf-optimize/tree/research-score-fusion) | Hybrid | 0.39180 | 0.39126 | 107.18 | 142.44 | $0.001637* | [`41e64d4`](https://github.com/softwaredoug/tpuf-optimize/commit/41e64d4) |
 | [2:1 Voyage-4 + BM25 RRF](https://github.com/softwaredoug/tpuf-optimize/tree/experiment-6-hybrid-rrf) | Hybrid | 0.38454 | 0.38382 | 134.50 | 207.70 | $0.001637* | [`cc5fc8a`](https://github.com/softwaredoug/tpuf-optimize/commit/cc5fc8a) |
 | [Passage BM25 + fuzzy title/brand](https://github.com/softwaredoug/tpuf-optimize/tree/exp3-bm25-passage-fuzzy) | Lexical | 0.37588 | 0.37519 | 67.03 | 106.56 | $0.000000* | [`c46c935`](https://github.com/softwaredoug/tpuf-optimize/commit/c46c935) |
