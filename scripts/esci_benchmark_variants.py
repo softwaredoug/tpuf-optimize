@@ -30,15 +30,15 @@ VARIANTS = (
     Variant(
         "typed", "Typed + computed reranker", "6508e87",
         "innovate-typed-computed-ltr", .42305, True,
-        category="Learned reranker",
+        category="LTR",
     ),
     Variant("computed", "Computed-feature reranker", "e64100d",
             "innovate-computed-ltr-features", .41592, True,
-            category="Learned reranker"),
+            category="LTR"),
     Variant(
         "learned", "Learned pairwise reranker", "adf9768",
         "research/learned-rank", .41094, True,
-        category="Learned reranker",
+        category="LTR",
     ),
     Variant(
         "identifier", "Identifier-gated RRF", "7e22661",

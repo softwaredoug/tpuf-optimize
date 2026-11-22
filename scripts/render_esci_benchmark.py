@@ -13,7 +13,7 @@ END = "<!-- esci-benchmark:end -->"
 CATEGORY_LABELS = {
     "Lexical": "Lexical",
     "Hybrid (lexical + embedding)": "Hybrid",
-    "Learned reranker": "Learned reranker",
+    "LTR": "LTR",
     "Third-party reranker": "Third-party reranker",
     "Embedding": "Embedding",
 }
@@ -38,8 +38,9 @@ def render_block(aggregate, assets):
             f"{aggregate['checked_artifacts']} available historical task artifacts.",
             "",
             "Classes: lexical; hybrid (lexical + embedding, including "
-            "rule-based reranking on both); learned reranker; third-party "
-            "reranker. Pure embedding retrieval is listed separately."
+            "rule-based reranking on both); LTR (Learning to Rank), a classic "
+            "ML reranker using query-dependent, query, and document features; "
+            "third-party reranker. Pure embedding retrieval is listed separately."
             "",
         ]
     lines += [
