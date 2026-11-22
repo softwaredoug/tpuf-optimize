@@ -167,6 +167,33 @@ so relevance experiments can focus on the strategy without changing the runners.
 
 ## ESCI 5,000-query leaderboard
 
+### Fresh matched lexical comparison (separate cohort)
+
+This fresh 5,000-query Referee session measured NDCG and latency for the lexical
+leader, the RMS stack, and its opt-in fuzzy-position variant. These results use
+a different query cohort from the historical leaderboard table below.
+
+| Variant | NDCG@10 (full) | NDCG@10 (disjoint) | p50 (ms) | p95 (ms) | 429 retries |
+|---|---:|---:|---:|---:|---:|
+| c46 passage BM25 + fuzzy title/brand (`c46c935`) | 0.370765 | 0.371805 | 69.22 | 114.81 | 0 |
+| RMS lexical stack (`038e845`) | 0.387974 | 0.389259 | 91.40 | 150.97 | 0 |
+| RMS stack + fuzzy-position boost 0.15 (`d663a92`, opt-in) | 0.388344 | 0.389554 | 94.09 | 162.60 | 0 |
+
+The fuzzy-position variant improved over c46 by `+0.017579` paired (95% CI
+`[+0.015031, +0.020238]`). Its incremental gain over the RMS stack was
+`+0.000371` (95% CI `[-0.000150, +0.000906]`), so the boost remains opt-in.
+None of these full-split scores reached `0.39`; the disjoint fuzzy-position
+score was `0.389554`.
+
+![Fresh lexical benchmark NDCG@10 versus p50 latency](assets/esci-lexical-fresh-p50.svg)
+
+![Fresh lexical benchmark NDCG@10 versus p95 latency](assets/esci-lexical-fresh-p95.svg)
+
+Recreate these separate charts from the aggregate-only JSON with
+`uv run python scripts/render_lexical_benchmark.py --aggregate "$RUN/aggregate.json"`.
+
+### Existing full leaderboard cohort
+
 To measure a single checkout without a client-side result or feature cache,
 use an explicit `query_id,query,locale` CSV and keep the inputs and outputs
 outside the repository in a private directory:
@@ -229,32 +256,6 @@ Classes: lexical; hybrid (lexical + embedding, including rule-based reranking on
 ![ESCI NDCG@10 versus estimated model cost per 5,000 queries](assets/esci-pareto-cost.svg)
 
 <!-- esci-benchmark:end -->
-
-## Fresh matched lexical 5,000-query timed benchmark
-
-These lexical-only results use a fresh Referee session, separate from the
-leaderboard cohort above. Each query was measured serially (batch size one);
-latency is for the successful attempt. The disjoint column excludes the 181
-queries matching 62 historical task artifacts.
-
-| Variant | NDCG@10 (full) | NDCG@10 (disjoint) | p50 (ms) | p95 (ms) | 429 retries |
-|---|---:|---:|---:|---:|---:|
-| c46 passage BM25 + fuzzy title/brand (`c46c935`) | 0.370765 | 0.371805 | 69.22 | 114.81 | 0 |
-| RMS lexical stack (`038e845`) | 0.387974 | 0.389259 | 91.40 | 150.97 | 0 |
-| RMS stack + fuzzy-position boost 0.15 (`d663a92`, opt-in) | 0.388344 | 0.389554 | 94.09 | 162.60 | 0 |
-
-The fuzzy-position variant improved over c46 by `+0.017579` paired (95% CI
-`[+0.015031, +0.020238]`). Its incremental gain over the RMS stack was
-`+0.000371` (95% CI `[-0.000150, +0.000906]`), so keep that boost opt-in. None
-of the full-split scores reached `0.39`; the disjoint fuzzy-position score was
-`0.389554`.
-
-![Fresh lexical benchmark NDCG@10 versus p50 latency](assets/esci-lexical-fresh-p50.svg)
-
-![Fresh lexical benchmark NDCG@10 versus p95 latency](assets/esci-lexical-fresh-p95.svg)
-
-Recreate these two separate charts from the aggregate-only JSON with
-`uv run python scripts/render_lexical_benchmark.py --aggregate "$RUN/aggregate.json"`.
 
 Refresh the table and all three Pareto charts from the aggregate-only JSON with
 `uv run python scripts/render_esci_benchmark.py`.
