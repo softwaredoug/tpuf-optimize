@@ -80,6 +80,11 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--top-k", type=int, default=10)
     parser.add_argument("--batch-size", type=int, default=100)
+    parser.add_argument(
+        "--pseudo-relevance-feedback",
+        action="store_true",
+        help="Run cautious, lexical-only pseudo-relevance feedback.",
+    )
     return parser
 
 
@@ -97,7 +102,12 @@ def main(argv: list[str] | None = None) -> int:
         requests = _read_queries(args.queries)
         with Turbopuffer(region=args.region) as client:
             namespace = client.namespace(args.namespace)
-            searcher = Searcher(namespace, TPufStrategy(), args.batch_size)
+            searcher = Searcher(
+                namespace,
+                TPufStrategy(),
+                args.batch_size,
+                pseudo_relevance_feedback=args.pseudo_relevance_feedback,
+            )
             _write_results(args.output, requests, searcher, args.top_k)
     except (OSError, ValueError) as error:
         parser.error(str(error))

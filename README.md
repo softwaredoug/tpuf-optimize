@@ -59,3 +59,15 @@ with title weighted twice as heavily. Queries with no hits are emitted with the
 `TPufStrategy` owns the ESCI document mapping, namespace schema, and query
 construction. The outer `Indexer` and `Searcher` handle batched namespace I/O,
 so relevance experiments can focus on the strategy without changing the runners.
+
+### Optional pseudo-relevance feedback
+
+`query --pseudo-relevance-feedback` enables an opt-in lexical feedback pass.
+It extracts at most two terms shared by at least two of the first five results,
+using only returned title, description, and brand text. A second BM25 query is
+combined with the original ranking using conservative reciprocal-rank fusion;
+the original candidate list is retained. The baseline remains the default.
+
+Training-only aggregate measurements for the selected feedback settings are in
+[`training_metrics.md`](training_metrics.md). They show a small but inconclusive
+gain, so feedback should remain opt-in pending an independent holdout check.

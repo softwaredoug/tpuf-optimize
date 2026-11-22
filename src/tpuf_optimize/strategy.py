@@ -129,6 +129,9 @@ class TPufStrategy:
     }
     PRETOKENIZED_FIELDS = ("title", "brand", "passage")
     FUZZY_QUERY_MIN_CHARS = 6
+    FEEDBACK_TERMS = 2
+    FEEDBACK_DOCUMENTS = 5
+    FEEDBACK_MIN_DOCUMENT_FREQUENCY = 2
 
     EMBEDDING_FIELDS = {
         "passage__embed__voyage_4": ("embedding__voyage_4__passage", "passage"),
@@ -358,5 +361,78 @@ class TPufStrategy:
             "rank_by": self.rank_by(query_text, locale),
             "filters": ("locale", "Eq", locale),
             "top_k": top_k,
-            "include_attributes": ["title", "description", "locale"],
+            "include_attributes": [
+                "title",
+                "description",
+                "brand__word_v2__default",
+                "locale",
+            ],
         }
+
+    @staticmethod
+    def _feedback_value(row: object, name: str) -> str:
+        try:
+            value = row[name]  # type: ignore[index]
+        except (AttributeError, KeyError, TypeError):
+            return ""
+        return value if isinstance(value, str) else ""
+
+    @staticmethod
+    def _feedback_tokens(text: str) -> list[str]:
+        return re.findall(r"[^\W_]+", text.casefold(), flags=re.UNICODE)
+
+    def feedback_terms(self, query_text: str, locale: str, rows: list[Any]) -> list[str]:
+        """Extract a few consensus terms from top lexical results only."""
+        if locale == "jp":
+            return []
+
+        stopwords = set(
+            "a an and are as at be by for from has have i in is it its of on or "
+            "that the this to with your you".split()
+        )
+        if locale == "es":
+            stopwords.update(
+                "a al algo como con de del el ella en es esta este la las lo los "
+                "más o para por que se su un una unos y".split()
+            )
+
+        query_tokens = set(self._feedback_tokens(query_text))
+        doc_frequency: dict[str, int] = {}
+        term_weight: dict[str, float] = {}
+        feedback = rows[: self.FEEDBACK_DOCUMENTS]
+        for rank, row in enumerate(feedback, start=1):
+            title = self._feedback_tokens(self._feedback_value(row, "title"))
+            description = self._feedback_tokens(
+                self._feedback_value(row, "description")
+            )
+            brand = self._feedback_tokens(
+                self._feedback_value(row, "brand")
+                or self._feedback_value(row, "brand__word_v2__default")
+            )
+            unique_terms = set(title + description + brand)
+            for term in unique_terms:
+                doc_frequency[term] = doc_frequency.get(term, 0) + 1
+            for term in title:
+                term_weight[term] = term_weight.get(term, 0.0) + 2.0 / rank
+            for term in brand:
+                term_weight[term] = term_weight.get(term, 0.0) + 1.4 / rank
+            for term in description:
+                term_weight[term] = term_weight.get(term, 0.0) + 0.45 / rank
+
+        scored: list[tuple[float, str]] = []
+        doc_count = len(feedback)
+        for term, weight in term_weight.items():
+            frequency = doc_frequency[term]
+            if (
+                term in query_tokens
+                or term in stopwords
+                or len(term) < 3
+                or term.isnumeric()
+                or frequency < self.FEEDBACK_MIN_DOCUMENT_FREQUENCY
+            ):
+                continue
+            idf = math.log(1 + (doc_count + 0.5) / (frequency + 0.5))
+            scored.append((weight * idf, term))
+
+        scored.sort(key=lambda item: (-item[0], item[1]))
+        return [term for _, term in scored[: self.FEEDBACK_TERMS]]

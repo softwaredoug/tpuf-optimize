@@ -5,6 +5,7 @@ from __future__ import annotations
 import unittest
 
 import pandas as pd
+from turbopuffer.types import Row
 
 from tpuf_optimize.strategy import TPufStrategy
 
@@ -145,6 +146,26 @@ class TPufStrategyTests(unittest.TestCase):
             ["a", "b", "café"],
         )
         self.assertEqual(self.strategy.pretokenize("青い靴"), ["青", "い", "靴"])
+
+    def test_feedback_uses_consensus_terms_and_skips_japanese(self) -> None:
+        rows = [
+            Row.from_dict(
+                {
+                    "id": f"doc-{index}",
+                    "title": "Blue hiking boots",
+                    "description": "Waterproof trail footwear",
+                    "brand__word_v2__default": "North Star",
+                }
+            )
+            for index in range(3)
+        ]
+
+        terms = self.strategy.feedback_terms("blue shoe", "us", rows)
+
+        self.assertEqual(len(terms), 2)
+        self.assertNotIn("blue", terms)
+        self.assertNotIn("shoe", terms)
+        self.assertEqual(self.strategy.feedback_terms("青い靴", "jp", rows), [])
 
 
 if __name__ == "__main__":
