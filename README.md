@@ -99,11 +99,14 @@ uv run query --queries queries.csv --output results.csv \
   --field-fusion passage_fold_brand_whitespace
 ```
 
-On a fresh 5,000-query NDCG-only split, this recipe scored **0.390103 full /
-0.389176 artifact-disjoint**; c46 scored `0.368813 / 0.368299` on the same
-split. The fuzzy-position increment over the RMS stack was `+0.000343` with a
-paired 95% CI of `[-0.000162, +0.000869]`, so keep that bonus opt-in. A timed
-5,000-query run is in progress.
+On the fresh timed 5,000-query benchmark, this recipe scored `0.388344` full /
+`0.389554` artifact-disjoint at p50/p95 latency of `94.09/162.60 ms`. The RMS
+stack without the fuzzy-position bonus scored `0.387974/0.389259` at
+`91.40/150.97 ms`; c46 scored `0.370765/0.371805` at `69.22/114.81 ms`. The
+fuzzy-position increment over RMS was `+0.000371` paired (95% CI
+`[-0.000150, +0.000906]`), so keep that bonus opt-in. None of these full-split
+scores reached `0.39`. An earlier NDCG-only split scored `0.390103` for the
+fuzzy-position variant; it is preliminary and not the timed benchmark result.
 
 ## Setup
 
@@ -227,27 +230,31 @@ Classes: lexical; hybrid (lexical + embedding, including rule-based reranking on
 
 <!-- esci-benchmark:end -->
 
-## Separate fresh lexical NDCG check
+## Fresh matched lexical 5,000-query timed benchmark
 
-These lexical-only results are from a separate, fresh 5,000-query Referee
-session, not the cohort in the leaderboard above. The disjoint column excludes
-the 149 queries matching 62 historical task artifacts.
+These lexical-only results use a fresh Referee session, separate from the
+leaderboard cohort above. Each query was measured serially (batch size one);
+latency is for the successful attempt. The disjoint column excludes the 181
+queries matching 62 historical task artifacts.
 
-| Variant | NDCG@10 (full) | NDCG@10 (disjoint) |
-|---|---:|---:|
-| c46 passage BM25 + fuzzy title/brand (`c46c935`) | 0.368813 | 0.368299 |
-| RMS lexical stack (`038e845`) | 0.389760 | 0.388867 |
-| RMS stack + fuzzy-position boost 0.15 (`d663a92`, opt-in) | **0.390103** | **0.389176** |
+| Variant | NDCG@10 (full) | NDCG@10 (disjoint) | p50 (ms) | p95 (ms) | 429 retries |
+|---|---:|---:|---:|---:|---:|
+| c46 passage BM25 + fuzzy title/brand (`c46c935`) | 0.370765 | 0.371805 | 69.22 | 114.81 | 0 |
+| RMS lexical stack (`038e845`) | 0.387974 | 0.389259 | 91.40 | 150.97 | 0 |
+| RMS stack + fuzzy-position boost 0.15 (`d663a92`, opt-in) | 0.388344 | 0.389554 | 94.09 | 162.60 | 0 |
 
-The opt-in fuzzy-position variant improved over c46 by `+0.021290` paired
-(95% bootstrap CI `[+0.018725, +0.023739]`). Its incremental gain over the RMS
-stack was `+0.000343` (95% CI `[-0.000162, +0.000869]`), so that additional
-boost is uncertain. The full-split score exceeds the 0.39 goal by `0.000103`;
-the artifact-disjoint score is `0.000824` below it.
+The fuzzy-position variant improved over c46 by `+0.017579` paired (95% CI
+`[+0.015031, +0.020238]`). Its incremental gain over the RMS stack was
+`+0.000371` (95% CI `[-0.000150, +0.000906]`), so keep that boost opt-in. None
+of the full-split scores reached `0.39`; the disjoint fuzzy-position score was
+`0.389554`.
 
-No latency measurements were taken for this separate check, so these runs are
-not included in the Pareto charts above. Those charts continue to describe only
-the leaderboard cohort.
+![Fresh lexical benchmark NDCG@10 versus p50 latency](assets/esci-lexical-fresh-p50.svg)
+
+![Fresh lexical benchmark NDCG@10 versus p95 latency](assets/esci-lexical-fresh-p95.svg)
+
+Recreate these two separate charts from the aggregate-only JSON with
+`uv run python scripts/render_lexical_benchmark.py --aggregate "$RUN/aggregate.json"`.
 
 Refresh the table and all three Pareto charts from the aggregate-only JSON with
 `uv run python scripts/render_esci_benchmark.py`.
