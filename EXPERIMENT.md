@@ -47,3 +47,10 @@ Paired mean NDCG@10 delta: **+0.00199**. Paired-query bootstrap 95% interval:
 but the interval includes zero; p50 latency increased by 0.98 ms and p95 by
 9.33 ms. This is a small, uncertain training gain, so private holdout evaluation
 is useful to determine whether the brand contribution generalizes.
+
+## Private holdout evaluation
+
+On 500 matched queries, the baseline scored **0.3693039 NDCG@10** and the
+composite scored **0.3720574**, a delta of **+0.0027535**. Baseline p50/p95
+latency was **61.20/70.53 ms**; composite p50/p95 was **61.07/70.30 ms**.
+Both variants used one serial TPuf request per query, with zero 429 retries.
