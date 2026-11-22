@@ -40,13 +40,17 @@ class Searcher:
         strategy: TPufStrategy,
         batch_size: int = 16,
         lexical_candidate_fusion: bool = False,
+        attribute_candidate_fusion: bool = False,
     ) -> None:
         if batch_size < 1:
             raise ValueError("batch_size must be greater than zero")
         self.namespace = namespace
         self.strategy = strategy
         self.batch_size = batch_size
-        self.lexical_candidate_fusion = lexical_candidate_fusion
+        self.lexical_candidate_fusion = (
+            lexical_candidate_fusion or attribute_candidate_fusion
+        )
+        self.attribute_candidate_fusion = attribute_candidate_fusion
         self.lexical_stats = {
             "arm_queries": 0,
             "zero_result_arms": 0,
@@ -58,7 +62,13 @@ class Searcher:
     ) -> Iterator[tuple[SearchRequest, list[Row]]]:
         """Yield each request with its rows, issuing one API call per batch."""
         iterator = iter(requests)
-        arm_count = 4 if self.lexical_candidate_fusion else 1
+        arm_count = (
+            1
+            + 3
+            + int(self.attribute_candidate_fusion)
+            if self.lexical_candidate_fusion
+            else 1
+        )
         request_batch_size = min(self.batch_size, 16 // arm_count)
         while request_batch := list(
             itertools.islice(iterator, request_batch_size)
@@ -70,7 +80,10 @@ class Searcher:
                     for query in (
                         self.strategy.query(request.text, request.locale, 50),
                         *self.strategy.lexical_candidate_queries(
-                            request.text, request.locale, 50
+                            request.text,
+                            request.locale,
+                            50,
+                            include_attribute_arm=self.attribute_candidate_fusion,
                         ),
                     )
                 ]

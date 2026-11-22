@@ -362,7 +362,11 @@ class TPufStrategy:
         }
 
     def lexical_candidate_queries(
-        self, query_text: str, locale: str, top_k: int
+        self,
+        query_text: str,
+        locale: str,
+        top_k: int,
+        include_attribute_arm: bool = False,
     ) -> tuple[Query, ...]:
         """Build selective lexical retrieval arms for post-retrieval union fusion.
 
@@ -384,7 +388,7 @@ class TPufStrategy:
             if locale_analyzer is not None
             else self.DEFAULT_ANALYZER
         )
-        return (
+        queries = (
             self._filtered_candidate_query(
                 f"title__{suffix}",
                 "ContainsAllTokens",
@@ -406,6 +410,28 @@ class TPufStrategy:
                 locale,
                 top_k,
             ),
+        )
+        if not include_attribute_arm:
+            return queries
+
+        attribute_rank_by = cast(
+            RankBy,
+            (
+                "Max",
+                tuple(
+                    (f"{field}__{suffix}", "BM25", query_text)
+                    for field in ("bullet_point", "color", "category")
+                ),
+            ),
+        )
+        return (
+            *queries,
+            {
+                "rank_by": attribute_rank_by,
+                "filters": ("locale", "Eq", locale),
+                "top_k": top_k,
+                "include_attributes": ["title", "description", "locale"],
+            },
         )
 
     @staticmethod

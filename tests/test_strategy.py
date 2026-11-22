@@ -160,6 +160,36 @@ class TPufStrategyTests(unittest.TestCase):
         self.assertEqual(queries[0]["rank_by"][0], "title__kuromoji__ja")
         self.assertEqual(queries[1]["rank_by"][0], "passage__kuromoji__ja")
 
+    def test_attribute_candidate_arm_searches_existing_product_fields(self) -> None:
+        queries = self.strategy.lexical_candidate_queries(
+            "blue running shoe",
+            "us",
+            top_k=50,
+            include_attribute_arm=True,
+        )
+
+        self.assertEqual(len(queries), 4)
+        self.assertEqual(
+            queries[3]["rank_by"],
+            (
+                "Max",
+                (
+                    (
+                        "bullet_point__word_v4__en__stem_stop",
+                        "BM25",
+                        "blue running shoe",
+                    ),
+                    ("color__word_v4__en__stem_stop", "BM25", "blue running shoe"),
+                    (
+                        "category__word_v4__en__stem_stop",
+                        "BM25",
+                        "blue running shoe",
+                    ),
+                ),
+            ),
+        )
+        self.assertEqual(queries[3]["filters"], ("locale", "Eq", "us"))
+
     def test_union_fusion_deduplicates_and_rewards_cross_arm_matches(self) -> None:
         title_match = cast(Row, SimpleNamespace(id="title-match"))
         consensus_match = cast(Row, SimpleNamespace(id="consensus-match"))

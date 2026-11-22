@@ -85,6 +85,14 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Union all-token and exact-phrase candidates with the baseline channel.",
     )
+    parser.add_argument(
+        "--attribute-candidate-fusion",
+        action="store_true",
+        help=(
+            "Add a BM25 arm for bullet-point, color, and category attributes to "
+            "the lexical candidate union."
+        ),
+    )
     return parser
 
 
@@ -107,13 +115,14 @@ def main(argv: list[str] | None = None) -> int:
                 TPufStrategy(),
                 args.batch_size,
                 lexical_candidate_fusion=args.lexical_candidate_fusion,
+                attribute_candidate_fusion=args.attribute_candidate_fusion,
             )
             _write_results(args.output, requests, searcher, args.top_k)
     except (OSError, ValueError) as error:
         parser.error(str(error))
 
     print(f"Wrote results for {len(requests)} queries to {args.output}.")
-    if args.lexical_candidate_fusion:
+    if args.lexical_candidate_fusion or args.attribute_candidate_fusion:
         print(
             "Lexical candidate coverage: "
             f"zero_result_arms={searcher.lexical_stats['zero_result_arms']}/"
