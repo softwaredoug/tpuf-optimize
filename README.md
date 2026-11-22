@@ -110,7 +110,10 @@ declined. Latencies are unbatched successful network time; candidate latency
 also includes local reranking. They were measured in a separate fresh serial
 pass from the NDCG submissions. The returned title/description/brand values
 were non-empty for 100.0% / 49.3% / 93.8% of top-100 candidates, respectively.
-Private holdout validation is pending.
+On the orchestrator-evaluated private 500-query holdout, baseline/reranker
+NDCG@10 was 0.3693039 / 0.3754472 (**+0.0061433**). Baseline/reranker p50/p95
+latency was 61.97/76.62 ms and 82.62/101.67 ms, respectively. Both used one
+serial TPuf request per query; the holdout run had zero 429 retries.
 
 ## ESCI 5,000-query leaderboard
 
