@@ -16,7 +16,6 @@ CATEGORY_LABELS = {
     "Learned reranker": "Learned reranker",
     "Third-party reranker": "Third-party reranker",
     "Embedding": "Embedding",
-    "Handcrafted reranker": "Handcrafted reranker",
 }
 
 
@@ -38,9 +37,9 @@ def render_block(aggregate, assets):
             f"The second NDCG column covers the {disjoint:,} queries not found in "
             f"{aggregate['checked_artifacts']} available historical task artifacts.",
             "",
-            "Classes: lexical; hybrid (lexical + embedding); learned reranker; "
-            "third-party reranker. Embedding-only retrieval and handcrafted "
-            "reranking are shown separately because they do not fit those four.",
+            "Classes: lexical; hybrid (lexical + embedding, including "
+            "rule-based reranking on both); learned reranker; third-party "
+            "reranker. Pure embedding retrieval is listed separately."
             "",
         ]
     lines += [

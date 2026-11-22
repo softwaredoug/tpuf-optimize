@@ -34,7 +34,7 @@ class FrozenVariantTests(unittest.TestCase):
         self.assertEqual(categories["typed"], "Learned reranker")
         self.assertEqual(categories["voyage-rerank"], "Third-party reranker")
         self.assertEqual(categories["voyage"], "Embedding")
-        self.assertEqual(categories["product"], "Handcrafted reranker")
+        self.assertEqual(categories["product"], "Hybrid (lexical + embedding)")
 
     def test_all_variants_rank_independently_on_every_execution(self):
         request = SearchRequest("qid", "blue shoe", "us")
