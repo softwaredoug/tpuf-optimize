@@ -113,7 +113,8 @@ Review the service here:
 http://localhost:8080/docs
 
 When you start work, and before delegation create a referee session for the esci dataset for
-~1000 qureies with two splits - one for holdout, the other for training.
+~1000 qureies with two splits - one for holdout, the other for training. **Use a seed that's secure**
+ie generate a random number in the orchestrator and **do not share it with subagents**
 
 Keep one bearer token (identifying a split) for yourself. NEVER LEAK IT TO A SUBAGENT
 
@@ -139,6 +140,9 @@ You may be asked to benchmark the top N leaders. Plus baselines on an explicit b
 from referee. Use 5000 queries for the final benchmark. We'll call this split 'benchmark' and it should
 be created from a new referee session.
 
+Use a constant seed of 42 when creating this, with num queries 5000, and split of 1.0 and the query 
+population should be identical. And we can then populate a table with consistent results.
+
 We want to capture
 - NDCG@10 on this 5000 query split
 - per-query latency
@@ -157,7 +161,7 @@ as the amortized latency for each query.
 
 The output should be:
 
-- A README table detailing each variant, with column for NDCG@10, p50, p95 latency
+- A README table detailing each variant, with column for NDCG@10, p50, p95 latency, sorted by NDCG@10 descending
 - A pareto graph showing NDCG@10 vs p95 latency for each variant
 - A second pareto graph showing NDCG@10 vs p50 latency for each variant
 
@@ -181,6 +185,16 @@ When responding, you can tell the overall metric delta, but NEVER SPECIFIC QUERI
 ## Use the batch runner to generate CSVs to submit solutions
 
 The batch query runner should generate CSVs conforming to referee's exected format of search results.
+
+## Experiment branches vs main
+
+We heavily create new branches fro experimetns, comitting promising runs. The experiment branch's
+README should describe in query DSL (plus python psuedo-code if applicable) how the variant 
+works.
+
+main should stay a simple baseline query approach, the baseline functionality for benchmarking
+and measurement -- clean starting point -- with a table in README describing the best experiments
+in a table as descrsibed above.
 
 ## Classes of experiments
 
