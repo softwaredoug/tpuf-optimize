@@ -114,12 +114,26 @@ def main():
     parser.add_argument("--state", type=Path, required=True, help="Private run directory")
     parser.add_argument("--publish", type=Path, help="Destination for aggregate-only JSON")
     parser.add_argument(
+        "--only",
+        nargs="+",
+        choices=[variant.slug for variant in VARIANTS],
+        help="Run only these frozen variants (do not render a partial leaderboard).",
+    )
+    parser.add_argument(
         "--render", action="store_true", help="Refresh the README and plots on publish",
     )
     parser.add_argument("--prepare-only", action="store_true")
     args = parser.parse_args()
     if args.render and args.publish is None:
         parser.error("--render requires --publish")
+    if args.render and args.only:
+        parser.error("--render cannot publish a partial variant selection.")
+    selected_variants = tuple(
+        variant for variant in VARIANTS
+        if args.only is None or variant.slug in args.only
+    )
+    if not selected_variants:
+        parser.error("Select at least one benchmark variant.")
     os.umask(0o077)
     state = args.state.resolve()
     if state.is_relative_to(Path.cwd()):
@@ -133,12 +147,12 @@ def main():
     lock = (state / "run.lock").open("a")
     try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        run(args, state)
+        run(args, state, selected_variants)
     finally:
         lock.close()
 
 
-def run(args, state):
+def run(args, state, variants=VARIANTS):
     token_path = state / "session.json"
     if not token_path.exists():
         seed = secrets.randbits(63)
@@ -224,7 +238,7 @@ def run(args, state):
                 / 1_000_000
                 if variant.rerank_model else 0.0
             )
-            for variant in VARIANTS
+            for variant in variants
         },
         "variant_cost_per_run_usd": {
             variant.slug: (
@@ -237,7 +251,7 @@ def run(args, state):
                 * COUNT
                 if variant.rerank_model else 0.0
             )
-            for variant in VARIANTS
+            for variant in variants
         },
         "excludes": [
             "Turbopuffer database/storage/query charges",
@@ -249,13 +263,16 @@ def run(args, state):
         "variant_cost_per_query_usd",
         "variant_cost_per_run_usd",
     }
-    for key, value in previous_costs.items():
-        if key not in cost_estimates:
+    for cost_key, value in previous_costs.items():
+        if cost_key not in cost_estimates:
             raise ValueError("Benchmark cost-estimate basis changed")
-        if key in per_variant_cost_keys:
-            if any(cost_estimates[key].get(slug) != amount for slug, amount in value.items()):
+        if cost_key in per_variant_cost_keys:
+            if any(
+                cost_estimates[cost_key].get(slug) != amount
+                for slug, amount in value.items()
+            ):
                 raise ValueError("Benchmark cost-estimate basis changed")
-        elif cost_estimates[key] != value:
+        elif cost_estimates[cost_key] != value:
             raise ValueError("Benchmark cost-estimate basis changed")
     summary["cost_estimates"] = cost_estimates
     if any(summary[field] != value for field, value in cohort.items()):
@@ -264,12 +281,12 @@ def run(args, state):
         v.slug: subprocess.check_output(
             ["git", "rev-parse", f"{v.revision}^{{commit}}"], text=True,
         ).strip()
-        for v in VARIANTS
+        for v in variants
     }
     for slug, result in summary["variants"].items():
         if result["commit"] != revisions[slug]:
             raise ValueError("A completed variant's frozen revision changed")
-    for variant in VARIANTS:
+    for variant in variants:
         if variant.slug in summary["variants"]:
             continue
         run_variant(state, token, expected, outside, requests, region, namespace,

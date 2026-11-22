@@ -3,6 +3,108 @@
 Utilities for indexing datasets into Turbopuffer and experimenting with search
 parameters.
 
+## Current lexical leader recipe (opt-in)
+
+The strongest current lexical recipe is on
+[`experiment/lexical-union-position`](https://github.com/softwaredoug/tpuf-optimize/tree/experiment/lexical-union-position)
+at [`d663a92`](https://github.com/softwaredoug/tpuf-optimize/commit/d663a92).
+It uses only existing indexed text: locale-aware passage/title BM25, folded
+passage and whitespace-brand BM25, selective AND/phrase candidate retrieval,
+RRF, and a bounded text-only reranker. No embeddings or learned reranker are
+used. The one-edit fuzzy-position boost is opt-in because its incremental gain
+over the RMS stack is uncertain.
+
+For a query `q` and locale analyzer suffix `L`, the broad Turbopuffer query has
+this shape:
+
+```python
+base = {
+    "rank_by": ("Sum", (
+        (f"passage__{L}", "BM25", q),
+        ("Product", 2.0, (f"title__{L}", "BM25", q)),
+        ("Product", 0.5, ("passage__word_v4__fold", "BM25", q)),
+        ("Product", 0.5, ("brand__whitespace__default", "BM25", q)),
+        # For each non-Japanese query token >= 6 characters:
+        ("Product", 0.35, (
+            "title__word_v4__fuzzy", "Fuzzy", token,
+            {"max_edit_distance": [{"min_query_chars": 6, "distance": 1}],
+             "case_sensitive": False},
+        )),
+        ("Product", 0.15, (
+            "brand__word_v4__fuzzy", "Fuzzy", token,
+            {"max_edit_distance": [{"min_query_chars": 6, "distance": 1}],
+             "case_sensitive": False},
+        )),
+    )),
+    "filters": ("locale", "Eq", locale),
+    "top_k": 50,
+    "include_attributes": ["title", "description", "brand", "locale"],
+}
+```
+
+The three selective arms use the same DSL shape, changing the field and filter
+operator:
+
+```python
+title_all = {
+    "rank_by": (f"title__{L}", "BM25", q),
+    "filters": ("And", (
+        ("locale", "Eq", locale),
+        (f"title__{L}", "ContainsAllTokens", q),
+    )),
+    "top_k": 50,
+}
+passage_phrase = {
+    "rank_by": (f"passage__{L}", "BM25", q),
+    "filters": ("And", (
+        ("locale", "Eq", locale),
+        (f"passage__{L}", "ContainsTokenSequence", q),
+    )),
+    "top_k": 50,
+}
+brand_phrase = {
+    "rank_by": ("brand__word_v4__default", "BM25", q),
+    "filters": ("And", (
+        ("locale", "Eq", locale),
+        ("brand__word_v4__default", "ContainsTokenSequence", q),
+    )),
+    "top_k": 50,
+}
+```
+
+These three lists plus the broad query are merged with reciprocal-rank fusion,
+`score[doc] += 1 / (20 + rank)`, then capped at 50.
+
+At query time, the returned text is used to reorder that union:
+
+```text
+adjusted =
+    1 - fused_rank / max(candidate_count - 1, 1)
+    + 0.18 * RMS(title/description/brand position quality)
+    + 0.03 * cross-field term coverage
+    + optional 0.15 * one-edit title/brand match coverage
+```
+
+Position quality rewards query-term coverage, order, compactness, early
+occurrence, and exact phrase matches. The optional fuzzy term applies only to
+query tokens at least six characters long and is disabled for Japanese. Reproduce
+the opt-in recipe with:
+
+```sh
+uv run query --queries queries.csv --output results.csv \
+  --lexical-candidate-fusion --lexical-rerank \
+  --lexical-cross-field-boost 0.03 \
+  --lexical-position-aggregation rms \
+  --lexical-fuzzy-position-boost 0.15 \
+  --field-fusion passage_fold_brand_whitespace
+```
+
+On a fresh 5,000-query NDCG-only split, this recipe scored **0.390103 full /
+0.389176 artifact-disjoint**; c46 scored `0.368813 / 0.368299` on the same
+split. The fuzzy-position increment over the RMS stack was `+0.000343` with a
+paired 95% CI of `[-0.000162, +0.000869]`, so keep that bonus opt-in. A timed
+5,000-query run is in progress.
+
 ## Setup
 
 This project uses Python 3.15.2, managed by asdf, and `uv` for the environment
@@ -124,6 +226,28 @@ Classes: lexical; hybrid (lexical + embedding, including rule-based reranking on
 ![ESCI NDCG@10 versus estimated model cost per 5,000 queries](assets/esci-pareto-cost.svg)
 
 <!-- esci-benchmark:end -->
+
+## Separate fresh lexical NDCG check
+
+These lexical-only results are from a separate, fresh 5,000-query Referee
+session, not the cohort in the leaderboard above. The disjoint column excludes
+the 149 queries matching 62 historical task artifacts.
+
+| Variant | NDCG@10 (full) | NDCG@10 (disjoint) |
+|---|---:|---:|
+| c46 passage BM25 + fuzzy title/brand (`c46c935`) | 0.368813 | 0.368299 |
+| RMS lexical stack (`038e845`) | 0.389760 | 0.388867 |
+| RMS stack + fuzzy-position boost 0.15 (`d663a92`, opt-in) | **0.390103** | **0.389176** |
+
+The opt-in fuzzy-position variant improved over c46 by `+0.021290` paired
+(95% bootstrap CI `[+0.018725, +0.023739]`). Its incremental gain over the RMS
+stack was `+0.000343` (95% CI `[-0.000162, +0.000869]`), so that additional
+boost is uncertain. The full-split score exceeds the 0.39 goal by `0.000103`;
+the artifact-disjoint score is `0.000824` below it.
+
+No latency measurements were taken for this separate check, so these runs are
+not included in the Pareto charts above. Those charts continue to describe only
+the leaderboard cohort.
 
 Refresh the table and all three Pareto charts from the aggregate-only JSON with
 `uv run python scripts/render_esci_benchmark.py`.

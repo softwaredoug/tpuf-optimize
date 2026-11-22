@@ -63,6 +63,24 @@ VARIANTS = (
     Variant("fuzzy", "Passage BM25 + fuzzy title/brand", "c46c935",
             "exp3-bm25-passage-fuzzy", .37768, False,
             category="Lexical"),
+    Variant(
+        "rms-stack",
+        "RMS lexical candidate stack",
+        "038e845",
+        "experiment/lexical-union-position",
+        .383781,
+        False,
+        category="Lexical",
+    ),
+    Variant(
+        "rms-stack-fuzzy015",
+        "RMS stack + fuzzy-position boost 0.15",
+        "d663a92",
+        "experiment/lexical-union-position",
+        .384293,
+        False,
+        category="Lexical",
+    ),
     Variant("passage", "Title + locale-aware passage BM25", "cdb2d64",
             "relevance/field-weights-passage", .37658, False,
             category="Lexical"),
@@ -121,6 +139,12 @@ class FrozenSearcher(Searcher):
         self.slug = slug = variant.slug
         rev = variant.revision
         self.direct = slug in {"voyage", "bm25", "fuzzy", "passage"}
+        if slug in {"rms-stack", "rms-stack-fuzzy015"}:
+            strategy = load(rev, "strategy")
+            self.frozen = strategy.TPufStrategy(
+                field_fusion="passage_fold_brand_whitespace"
+            )
+            return
         if slug == "voyage-rerank":
             self.native_rerank = load(rev, "native_rerank")
             self.frozen = load("cc5fc8a", "strategy").TPufStrategy()
@@ -209,6 +233,38 @@ class FrozenSearcher(Searcher):
             if len(response.results) != 1:
                 raise ValueError("Voyage reranker returned an incomplete result.")
             return [(response.results[0].rows or [])[:top_k]]
+        if slug in {"rms-stack", "rms-stack-fuzzy015"}:
+            queries = [
+                self.frozen.query(text, locale, 50),
+                *self.frozen.lexical_candidate_queries(text, locale, 50),
+            ]
+            arm_rows = self._retrieve(queries)
+            fused_scores = {}
+            documents = {}
+            for rows in arm_rows:
+                for rank, row in enumerate(rows, 1):
+                    document_id = str(row.id)
+                    fused_scores[document_id] = (
+                        fused_scores.get(document_id, 0.0) + 1.0 / (20 + rank)
+                    )
+                    documents.setdefault(document_id, row)
+            ordered_ids = sorted(
+                fused_scores,
+                key=lambda document_id: (
+                    -fused_scores[document_id],
+                    document_id,
+                ),
+            )[:50]
+            candidates = [documents[document_id] for document_id in ordered_ids]
+            if slug == "rms-stack-fuzzy015":
+                ranked = self.frozen.rerank_lexically(
+                    text, candidates, .18, .03, "rms", .15, locale,
+                )
+            else:
+                ranked = self.frozen.rerank_lexically(
+                    text, candidates, .18, .03, "rms",
+                )
+            return [ranked[:top_k]]
         if self.direct:
             if slug == "voyage":
                 ann_query = self.frozen.hybrid_queries(text, locale, top_k)[0]
