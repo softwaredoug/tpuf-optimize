@@ -360,3 +360,71 @@ class TPufStrategy:
             "top_k": top_k,
             "include_attributes": ["title", "description", "locale"],
         }
+
+    def lexical_candidate_queries(
+        self, query_text: str, locale: str, top_k: int
+    ) -> tuple[Query, ...]:
+        """Build selective lexical retrieval arms for post-retrieval union fusion.
+
+        The regular passage/title/fuzzy query remains an independent channel.
+        These arms retrieve all-token title matches and exact phrases found in
+        the indexed passage or brand, rather than adding those signals as
+        additive rank-by boosts.
+        """
+        if not query_text.strip():
+            raise ValueError("query_text must not be empty")
+        if not locale.strip():
+            raise ValueError("locale must not be empty")
+        if top_k < 1:
+            raise ValueError("top_k must be greater than zero")
+
+        locale_analyzer = self.LOCALE_ANALYZERS.get(locale)
+        suffix = (
+            locale_analyzer[0]
+            if locale_analyzer is not None
+            else self.DEFAULT_ANALYZER
+        )
+        return (
+            self._filtered_candidate_query(
+                f"title__{suffix}",
+                "ContainsAllTokens",
+                query_text,
+                locale,
+                top_k,
+            ),
+            self._filtered_candidate_query(
+                f"passage__{suffix}",
+                "ContainsTokenSequence",
+                query_text,
+                locale,
+                top_k,
+            ),
+            self._filtered_candidate_query(
+                "brand__word_v4__default",
+                "ContainsTokenSequence",
+                query_text,
+                locale,
+                top_k,
+            ),
+        )
+
+    @staticmethod
+    def _filtered_candidate_query(
+        field: str,
+        filter_operator: str,
+        query_text: str,
+        locale: str,
+        top_k: int,
+    ) -> Query:
+        return {
+            "rank_by": (field, "BM25", query_text),
+            "filters": (
+                "And",
+                (
+                    ("locale", "Eq", locale),
+                    (field, filter_operator, query_text),
+                ),
+            ),
+            "top_k": top_k,
+            "include_attributes": ["title", "description", "locale"],
+        }

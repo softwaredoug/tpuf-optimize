@@ -79,7 +79,12 @@ def _parser() -> argparse.ArgumentParser:
         default=os.environ.get("TURBOPUFFER_REGION", "gcp-us-central1"),
     )
     parser.add_argument("--top-k", type=int, default=10)
-    parser.add_argument("--batch-size", type=int, default=100)
+    parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument(
+        "--lexical-candidate-fusion",
+        action="store_true",
+        help="Union all-token and exact-phrase candidates with the baseline channel.",
+    )
     return parser
 
 
@@ -97,12 +102,25 @@ def main(argv: list[str] | None = None) -> int:
         requests = _read_queries(args.queries)
         with Turbopuffer(region=args.region) as client:
             namespace = client.namespace(args.namespace)
-            searcher = Searcher(namespace, TPufStrategy(), args.batch_size)
+            searcher = Searcher(
+                namespace,
+                TPufStrategy(),
+                args.batch_size,
+                lexical_candidate_fusion=args.lexical_candidate_fusion,
+            )
             _write_results(args.output, requests, searcher, args.top_k)
     except (OSError, ValueError) as error:
         parser.error(str(error))
 
     print(f"Wrote results for {len(requests)} queries to {args.output}.")
+    if args.lexical_candidate_fusion:
+        print(
+            "Lexical candidate coverage: "
+            f"zero_result_arms={searcher.lexical_stats['zero_result_arms']}/"
+            f"{searcher.lexical_stats['arm_queries']}, "
+            f"mean_union_candidates="
+            f"{searcher.lexical_stats['union_candidates'] / len(requests):.2f}."
+        )
     return 0
 
 
