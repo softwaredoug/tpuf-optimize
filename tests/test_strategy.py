@@ -190,6 +190,17 @@ class TPufStrategyTests(unittest.TestCase):
         self.assertIn("passage__kuromoji__ja", rank_by)
         self.assertNotIn("__fuzzy", rank_by)
 
+    def test_folded_passage_channel_is_opt_in(self) -> None:
+        baseline = str(self.strategy.rank_by("blue shoe", "us"))
+        passage_fold = str(
+            TPufStrategy(field_fusion="passage_fold").rank_by("blue shoe", "us")
+        )
+
+        self.assertNotIn("passage__word_v4__fold", baseline)
+        self.assertIn("passage__word_v4__fold", passage_fold)
+        with self.assertRaises(ValueError):
+            TPufStrategy(field_fusion="unknown")
+
     def test_pretokenizer_handles_latin_and_japanese(self) -> None:
         self.assertEqual(
             self.strategy.pretokenize("A-B Café"),

@@ -17,6 +17,7 @@ returned title, description, and brand text. The final result is truncated to
 | c46 baseline | 0.367528 | 0.365288 |
 | Candidate union + RRF | 0.381733 | 0.378523 |
 | Candidate union + RRF + position reranker | 0.382969 | 0.380279 |
+| Candidate union + position + passage-fold BM25 (0.5) | 0.386081 | 0.382376 |
 
 The combined candidate's training delta over baseline was `+0.015441`; paired
 bootstrap 95% CI: `[+0.010990, +0.020080]`. It added `+0.001236` over union
@@ -24,5 +25,10 @@ alone on training. On matched holdout tasks it improved `+0.014991` over
 baseline and `+0.001757` over union alone. The private holdout result is
 aggregate-only; no query text, query IDs, result rows, or per-query judgments
 are stored here.
+
+The passage-fold arm added `+0.003112` over union+position on training
+(paired bootstrap 95% CI: `[+0.000926, +0.005379]`) and `+0.002097` on matched
+holdout tasks. The final stacked candidate improved `+0.018680` over the
+matched training baseline and `+0.017423` over the matched holdout baseline.
 
 No latency benchmark was performed. Phrase filters may add query latency.

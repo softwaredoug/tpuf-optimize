@@ -96,6 +96,12 @@ def _parser() -> argparse.ArgumentParser:
         default=TPufStrategy.LEXICAL_RERANK_MAX_BOOST,
         help="maximum normalized score adjustment (0 through 1)",
     )
+    parser.add_argument(
+        "--field-fusion",
+        choices=("none", *TPufStrategy.FIELD_FUSION_CHANNELS),
+        default="none",
+        help="Add an existing lexical field/analyzer channel to the baseline rank.",
+    )
     return parser
 
 
@@ -117,7 +123,7 @@ def main(argv: list[str] | None = None) -> int:
             namespace = client.namespace(args.namespace)
             searcher = Searcher(
                 namespace,
-                TPufStrategy(),
+                TPufStrategy(field_fusion=args.field_fusion),
                 args.batch_size,
                 lexical_candidate_fusion=args.lexical_candidate_fusion,
                 lexical_rerank=args.lexical_rerank,

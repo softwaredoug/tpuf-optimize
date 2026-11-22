@@ -25,6 +25,18 @@ class TPufStrategy:
     TITLE_WEIGHT = 2.0
     FUZZY_TITLE_WEIGHT = 0.35
     FUZZY_BRAND_WEIGHT = 0.15
+    FIELD_FUSION_CHANNELS = {
+        "passage_fold": (("passage__word_v4__fold", 0.5),),
+    }
+
+    def __init__(self, field_fusion: str = "none") -> None:
+        """Select an optional lexical analyzer channel."""
+        if field_fusion != "none" and field_fusion not in self.FIELD_FUSION_CHANNELS:
+            raise ValueError(
+                f"Unknown field fusion {field_fusion!r}; expected 'none' or one of "
+                f"{', '.join(self.FIELD_FUSION_CHANNELS)}"
+            )
+        self.field_fusion = field_fusion
 
     EMBEDDING_MODEL = "voyage/voyage-4"
     EMBEDDING_DIMS = 1024
@@ -350,6 +362,11 @@ class TPufStrategy:
                         ),
                     )
                 )
+
+        for field, weight in self.FIELD_FUSION_CHANNELS.get(
+            self.field_fusion, ()
+        ):
+            clauses.append(("Product", weight, (field, "BM25", query_text)))
 
         return cast(RankBy, ("Sum", tuple(clauses)))
 
