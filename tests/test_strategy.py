@@ -139,6 +139,22 @@ class TPufStrategyTests(unittest.TestCase):
         self.assertIn("passage__kuromoji__ja", rank_by)
         self.assertNotIn("__fuzzy", rank_by)
 
+    def test_field_fusion_adds_selected_bm25_channel(self) -> None:
+        baseline = str(TPufStrategy().rank_by("blue shoe", "us"))
+        fused = str(
+            TPufStrategy(field_fusion="description_b025").rank_by(
+                "blue shoe", "us"
+            )
+        )
+
+        self.assertNotIn("description__word_v4__b025", baseline)
+        self.assertIn("description__word_v4__b025", fused)
+        self.assertEqual(fused.count("description__word_v4__b025"), 1)
+
+    def test_field_fusion_rejects_unknown_channel(self) -> None:
+        with self.assertRaises(ValueError):
+            TPufStrategy(field_fusion="not_indexed")
+
     def test_pretokenizer_handles_latin_and_japanese(self) -> None:
         self.assertEqual(
             self.strategy.pretokenize("A-B Café"),

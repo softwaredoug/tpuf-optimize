@@ -54,6 +54,18 @@ Turbopuffer's multi-query API. Queries combine BM25 title and description scores
 with title weighted twice as heavily. Queries with no hits are emitted with the
 `-1,-1,-1` sentinel row.
 
+For lexical field/analyzer fusion experiments, pass `--field-fusion` with a
+channel name. The training-split comparison found `passage_fold` promising:
+
+```sh
+uv run query --queries queries.csv --output results.csv \
+  --field-fusion passage_fold
+```
+
+This adds BM25 over the existing ASCII-folded passage index at weight `0.5`;
+the baseline ranking remains intact. Aggregate training metrics are in
+[`experiments/lexical-field-fusion.md`](experiments/lexical-field-fusion.md).
+
 ## Search architecture
 
 `TPufStrategy` owns the ESCI document mapping, namespace schema, and query
