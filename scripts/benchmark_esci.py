@@ -6,7 +6,6 @@ import hashlib
 import json
 import math
 import os
-import secrets
 import sqlite3
 import statistics
 import subprocess
@@ -27,6 +26,7 @@ from tpuf_optimize.query_batch import _ranked_rows
 from tpuf_optimize.searcher import SearchRequest
 
 COUNT = 5000
+BENCHMARK_SEED = 42
 VOYAGE4_EMBED_USD_PER_MILLION = 0.06
 NATIVE_RERANK_TOKEN_PROXY_PER_QUERY = 25_380
 ALIASES = {"en-us": "us", "es-es": "es", "ja-jp": "jp"}
@@ -155,13 +155,17 @@ def main():
 def run(args, state, variants=VARIANTS):
     token_path = state / "session.json"
     if not token_path.exists():
-        seed = secrets.randbits(63)
+        seed = BENCHMARK_SEED
         session = post("/v1/sessions", payload={
             "dataset_name": "esci", "eval_mode": "ndcg", "splits": [1.0],
             "num_queries": COUNT, "seed": seed,
         })
         save(token_path, {"seed": seed, "token": session["split_tokens"][0]})
     session = json.loads(token_path.read_text(encoding="utf-8"))
+    if session.get("seed") != BENCHMARK_SEED:
+        raise ValueError(
+            "Benchmark state does not use the canonical seed 42; create a fresh state"
+        )
     token = session["token"]
     reference = state / "reference-task.json"
     if not reference.exists():
@@ -189,7 +193,8 @@ def run(args, state, variants=VARIANTS):
     outside = overlap["outside_ids"]
     if not outside or not set(outside) <= expected.keys():
         raise ValueError("Invalid previously seen query audit")
-    print(f"Verified {COUNT} queries; {COUNT - len(outside)} overlap "
+    print(f"Verified {COUNT} queries with seed {session['seed']}; "
+          f"{COUNT - len(outside)} overlap "
           f"across {overlap['checked_artifacts']} historical task artifacts.", flush=True)
     if args.prepare_only:
         return
@@ -206,6 +211,7 @@ def run(args, state, variants=VARIANTS):
         "query_count": COUNT, "disjoint_count": len(outside),
         "checked_artifacts": overlap["checked_artifacts"],
         "namespace": namespace, "region": region, "batch_size": 1,
+        "seed": session["seed"],
     }
     summary = (
         json.loads(aggregate.read_text()) if aggregate.exists() else {**cohort, "variants": {}}

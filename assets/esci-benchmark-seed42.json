@@ -1,0 +1,184 @@
+{
+  "query_count": 5000,
+  "disjoint_count": 3588,
+  "checked_artifacts": 62,
+  "namespace": "esci-products",
+  "region": "gcp-us-central1",
+  "batch_size": 1,
+  "seed": 42,
+  "variants": {
+    "typed": {
+      "commit": "6508e870031745c24907ff6e3f4d61f2eda6e118",
+      "ndcg_at_10": 0.4137661747893058,
+      "disjoint_ndcg_at_10": 0.41299252703424716,
+      "p50_ms": 200.08995849639177,
+      "p95_ms": 253.6730000283569,
+      "retries_429": 0
+    },
+    "computed": {
+      "commit": "e64100d10b482c19b0841bf4041165f35f63c78d",
+      "ndcg_at_10": 0.4083030420954752,
+      "disjoint_ndcg_at_10": 0.4080530707072683,
+      "p50_ms": 194.05712513253093,
+      "p95_ms": 266.37104200199246,
+      "retries_429": 0
+    },
+    "learned": {
+      "commit": "adf9768bbf14bfc6fa7603ac4504d32fe19a58f4",
+      "ndcg_at_10": 0.4015206116496728,
+      "disjoint_ndcg_at_10": 0.40096950690168126,
+      "p50_ms": 113.78741706721485,
+      "p95_ms": 155.29237501323223,
+      "retries_429": 0
+    },
+    "identifier": {
+      "commit": "7e226616b1d60bf922fbfe089bb9bc37afd90642",
+      "ndcg_at_10": 0.395632791024997,
+      "disjoint_ndcg_at_10": 0.3946865013877765,
+      "p50_ms": 113.99183340836316,
+      "p95_ms": 164.6172918844968,
+      "retries_429": 0
+    },
+    "product": {
+      "commit": "7ffd7723d5f04803b09114ba5a25f0e94dbb4701",
+      "ndcg_at_10": 0.3887884390210635,
+      "disjoint_ndcg_at_10": 0.3882337615017887,
+      "p50_ms": 154.07591697294265,
+      "p95_ms": 230.99183291196823,
+      "retries_429": 0
+    },
+    "minmax": {
+      "commit": "41e64d43c27aeda0d886c4d21cfbce18de5a1c69",
+      "ndcg_at_10": 0.3856654452011563,
+      "disjoint_ndcg_at_10": 0.3832663648959469,
+      "p50_ms": 111.42124992329627,
+      "p95_ms": 164.55695894546807,
+      "retries_429": 0
+    },
+    "hybrid": {
+      "commit": "cc5fc8a827adb6fe1315132a67fddbdebc7823ee",
+      "ndcg_at_10": 0.38124954462268806,
+      "disjoint_ndcg_at_10": 0.3800575321212002,
+      "p50_ms": 122.6555835455656,
+      "p95_ms": 199.39729198813438,
+      "retries_429": 0
+    },
+    "four": {
+      "commit": "3f4c9bc85a43b2b19fc4cba7b5c237a5fb00b2f7",
+      "ndcg_at_10": 0.36615876148140525,
+      "disjoint_ndcg_at_10": 0.36442052041345885,
+      "p50_ms": 125.48306246753782,
+      "p95_ms": 227.11729095317423,
+      "retries_429": 0
+    },
+    "fuzzy": {
+      "commit": "c46c935951d02d670b9d619162b13048ce8a1c2b",
+      "ndcg_at_10": 0.3675392442115495,
+      "disjoint_ndcg_at_10": 0.36931446057326656,
+      "p50_ms": 68.82689602207392,
+      "p95_ms": 98.7064999062568,
+      "retries_429": 0
+    },
+    "rms-stack": {
+      "commit": "038e845ea0ed52d38fc419f4dbdf4207782a4604",
+      "ndcg_at_10": 0.38748318516302405,
+      "disjoint_ndcg_at_10": 0.3872862495718479,
+      "p50_ms": 87.1253750519827,
+      "p95_ms": 133.6365828756243,
+      "retries_429": 0
+    },
+    "rms-stack-fuzzy015": {
+      "commit": "d663a92e86291ae2efbc08523bc7fe680c9affec",
+      "ndcg_at_10": 0.38783858128630605,
+      "disjoint_ndcg_at_10": 0.3878769351326961,
+      "p50_ms": 94.41743709612638,
+      "p95_ms": 172.13054187595844,
+      "retries_429": 0
+    },
+    "passage": {
+      "commit": "cdb2d64a83838c40bfc86394002143e6b6ad5349",
+      "ndcg_at_10": 0.366265558098991,
+      "disjoint_ndcg_at_10": 0.3682145138865437,
+      "p50_ms": 66.46489549893886,
+      "p95_ms": 98.15579187124968,
+      "retries_429": 0
+    },
+    "voyage": {
+      "commit": "cc5fc8a827adb6fe1315132a67fddbdebc7823ee",
+      "ndcg_at_10": 0.36437052687429555,
+      "disjoint_ndcg_at_10": 0.36311931945861164,
+      "p50_ms": 103.21410442702472,
+      "p95_ms": 160.41445801965892,
+      "retries_429": 0
+    },
+    "bm25": {
+      "commit": "1768df71b69e18f149cebba7d4c414bc44735099",
+      "ndcg_at_10": 0.3037245364985506,
+      "disjoint_ndcg_at_10": 0.3020331205629251,
+      "p50_ms": 63.773478963412344,
+      "p95_ms": 77.24908390082419,
+      "retries_429": 0
+    },
+    "voyage-rerank": {
+      "commit": "0a5816eeac4dcfcf1afe10da1e72af770feae208",
+      "ndcg_at_10": 0.4476182515552744,
+      "disjoint_ndcg_at_10": 0.4478481948949851,
+      "p50_ms": 243.13533352687955,
+      "p95_ms": 368.58766595833004,
+      "retries_429": 0
+    }
+  },
+  "cost_estimates": {
+    "currency": "USD",
+    "unit": "per user query",
+    "method": "Voyage-4 native embedding; UTF-8 query bytes / 4 token proxy",
+    "query_text_bytes": 109013,
+    "voyage4_query_tokens_proxy": 27253.25,
+    "voyage4_embedding_usd_per_million_tokens": 0.06,
+    "voyage4_embedding_usd_per_query": 3.27039e-07,
+    "voyage4_embedding_usd_total": 0.001635195,
+    "native_rerank_token_proxy_per_query": 25380,
+    "native_rerank_prices_usd_per_million_tokens": {
+      "cohere/rerank-v3.5": 0.1,
+      "voyage/rerank-3": 0.05
+    },
+    "variant_cost_per_query_usd": {
+      "typed": 3.27039e-07,
+      "computed": 3.27039e-07,
+      "learned": 3.27039e-07,
+      "identifier": 3.27039e-07,
+      "product": 3.27039e-07,
+      "minmax": 3.27039e-07,
+      "hybrid": 3.27039e-07,
+      "four": 3.27039e-07,
+      "fuzzy": 0.0,
+      "rms-stack": 0.0,
+      "rms-stack-fuzzy015": 0.0,
+      "passage": 0.0,
+      "voyage": 3.27039e-07,
+      "bm25": 0.0,
+      "voyage-rerank": 0.0012693270389999998
+    },
+    "variant_cost_per_run_usd": {
+      "typed": 0.001635195,
+      "computed": 0.001635195,
+      "learned": 0.001635195,
+      "identifier": 0.001635195,
+      "product": 0.001635195,
+      "minmax": 0.001635195,
+      "hybrid": 0.001635195,
+      "four": 0.001635195,
+      "fuzzy": 0.0,
+      "rms-stack": 0.0,
+      "rms-stack-fuzzy015": 0.0,
+      "passage": 0.0,
+      "voyage": 0.001635195,
+      "bm25": 0.0,
+      "voyage-rerank": 6.346635195
+    },
+    "excludes": [
+      "Turbopuffer database/storage/query charges",
+      "local CPU reranker costs"
+    ]
+  }
+}

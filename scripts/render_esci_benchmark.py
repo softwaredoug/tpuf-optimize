@@ -17,41 +17,27 @@ CATEGORY_LABELS = {
     "Third-party reranker": "Third-party reranker",
     "Embedding": "Embedding",
 }
-FRESH_LEXICAL_SLUGS = {"fuzzy", "rms-stack", "rms-stack-fuzzy015"}
 
 
-def render_block(aggregate, assets, fresh_lexical=None):
+def render_block(aggregate, assets):
     scores = aggregate.get("variants", {})
-    fresh_scores = (fresh_lexical or {}).get("variants", {})
     costs = aggregate.get("cost_estimates", {}).get(
         "variant_cost_per_run_usd", {}
     )
     query_count = aggregate.get("query_count", 5000)
     known_slugs = {variant.slug for variant in VARIANTS}
-    unknown = (scores.keys() | fresh_scores.keys()) - known_slugs
+    unknown = scores.keys() - known_slugs
     if unknown:
         raise ValueError("Unexpected variant in benchmark aggregate")
-    if fresh_scores.keys() - FRESH_LEXICAL_SLUGS:
-        raise ValueError("Fresh lexical aggregate contains an unexpected variant")
     count = aggregate.get("query_count")
     disjoint = aggregate.get("disjoint_count")
-    fresh_count = (fresh_lexical or {}).get("query_count")
-    fresh_disjoint = (fresh_lexical or {}).get("disjoint_count")
     lines = [START, ""]
     if count is not None:
         lines += [
-            f"Historical leaderboard variants used the same {count:,} Referee queries. "
+            f"All variants used the same {count:,} Referee queries with seed "
+            f"{aggregate.get('seed', 42)}. "
             f"The second NDCG column covers the {disjoint:,} queries not found in "
             f"{aggregate['checked_artifacts']} available historical task artifacts.",
-            "",
-        ]
-    if fresh_count is not None:
-        lines += [
-            f"Fresh lexical rows use a separate {fresh_count:,}-query Referee session. "
-            f"Their disjoint column covers {fresh_disjoint:,} queries after "
-            f"excluding {fresh_count - fresh_disjoint} overlaps with "
-            f"{fresh_lexical['checked_artifacts']} historical task artifacts. "
-            "Compare values within a cohort, not across cohorts.",
             "",
         ]
     if count is not None:
@@ -63,60 +49,32 @@ def render_block(aggregate, assets, fresh_lexical=None):
             "",
         ]
     lines += [
-        "| Variant | Cohort | Class | NDCG@10 (full) | NDCG@10 (disjoint) | "
-        f"p50 (ms) | p95 (ms) | Cost* (USD/{query_count:,} queries) | Commit |",
-        "|---|---|---|---:|---:|---:|---:|---:|---|",
+        "| Variant | Class | NDCG@10 (full) | NDCG@10 (disjoint) | p50 (ms) | p95 (ms) | "
+        f"Cost* (USD/{query_count:,} queries) | Commit |",
+        "|---|---|---:|---:|---:|---:|---:|---|",
     ]
     ordered = sorted(
-        (variant for variant in VARIANTS if variant.slug in scores),
+        VARIANTS,
         key=lambda v: scores.get(v.slug, {}).get("ndcg_at_10", -1),
         reverse=True,
     )
-    fresh_ordered = sorted(
-        (variant for variant in VARIANTS if variant.slug in fresh_scores),
-        key=lambda variant: fresh_scores[variant.slug]["ndcg_at_10"],
-        reverse=True,
-    )
-    table_rows = []
     for variant in ordered:
-        result = scores[variant.slug]
-        if not result["commit"].startswith(variant.revision):
+        result = scores.get(variant.slug)
+        if result is not None and not result["commit"].startswith(variant.revision):
             raise ValueError("Aggregate revision does not match the pinned variant")
-        table_rows.append((
-            float(result["ndcg_at_10"]),
-            variant,
-            "Historical leaderboard",
-            result,
-            costs.get(variant.slug),
-        ))
-    for variant in fresh_ordered:
-        result = fresh_scores[variant.slug]
-        if not result["commit"].startswith(variant.revision):
-            raise ValueError("Fresh lexical aggregate revision does not match")
-        table_rows.append((
-            float(result["ndcg_at_10"]),
-            variant,
-            "Fresh lexical",
-            result,
-            0.0,
-        ))
-    for _ndcg, variant, cohort, result, estimated_cost in sorted(
-        table_rows,
-        key=lambda row: (-row[0], row[2], row[1].name),
-    ):
         values = (
-            f"{result['ndcg_at_10']:.5f}",
-            f"{result['disjoint_ndcg_at_10']:.5f}",
-            f"{result['p50_ms']:.2f}",
-            f"{result['p95_ms']:.2f}",
+            ("Pending", "—", "—", "—") if result is None else
+            (f"{result['ndcg_at_10']:.5f}", f"{result['disjoint_ndcg_at_10']:.5f}",
+             f"{result['p50_ms']:.2f}", f"{result['p95_ms']:.2f}")
         )
+        estimated_cost = costs.get(variant.slug)
         cost_cell = (
             "—" if estimated_cost is None else f"${float(estimated_cost):.6f}*"
         )
         branch_url = f"https://github.com/softwaredoug/tpuf-optimize/tree/{variant.branch}"
         commit_url = f"https://github.com/softwaredoug/tpuf-optimize/commit/{variant.revision}"
         lines.append(
-            f"| [{variant.name}]({branch_url}) | {cohort} | "
+            f"| [{variant.name}]({branch_url}) | "
             f"{CATEGORY_LABELS.get(variant.category, variant.category)} | "
             f"{' | '.join(values)} | {cost_cell} | "
             f"[`{variant.revision}`]({commit_url}) |"
@@ -156,27 +114,15 @@ def render_block(aggregate, assets, fresh_lexical=None):
             "- **Third-party reranker** — hosted reranking model such as Voyage rerank-3.",
             "- **Embedding** — pure embedding retrieval; listed separately from hybrid.",
         ])
-    pending = len(VARIANTS) - len(scores.keys() | fresh_scores.keys())
+    pending = len(VARIANTS) - len(scores)
     for percentile in ("p50", "p95"):
         points = [
-            *[
-                Point(
-                    variant.name,
-                    scores[variant.slug][f"{percentile}_ms"],
-                    scores[variant.slug]["ndcg_at_10"],
-                    "Historical leaderboard",
-                )
-                for variant in ordered
-            ],
-            *[
-                Point(
-                    variant.name,
-                    fresh_scores[variant.slug][f"{percentile}_ms"],
-                    fresh_scores[variant.slug]["ndcg_at_10"],
-                    "Fresh lexical",
-                )
-                for variant in fresh_ordered
-            ],
+            Point(
+                variant.name,
+                scores[variant.slug][f"{percentile}_ms"],
+                scores[variant.slug]["ndcg_at_10"],
+            )
+            for variant in ordered if variant.slug in scores
         ]
         filename = f"esci-pareto-{percentile}.svg"
         (assets / filename).write_text(
@@ -188,20 +134,10 @@ def render_block(aggregate, assets, fresh_lexical=None):
             variant.name,
             float(costs[variant.slug]),
             float(scores[variant.slug]["ndcg_at_10"]),
-            "Historical leaderboard",
         )
         for variant in ordered
         if variant.slug in scores and variant.slug in costs
     ]
-    cost_points.extend(
-        Point(
-            variant.name,
-            0.0,
-            float(fresh_scores[variant.slug]["ndcg_at_10"]),
-            "Fresh lexical",
-        )
-        for variant in fresh_ordered
-    )
     cost_filename = "esci-pareto-cost.svg"
     query_count = aggregate.get("query_count", 5000)
     (assets / cost_filename).write_text(
@@ -230,11 +166,10 @@ def render_block(aggregate, assets, fresh_lexical=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--aggregate", type=Path, default=ROOT / "assets/esci-benchmark.json")
     parser.add_argument(
-        "--lexical-aggregate",
+        "--aggregate",
         type=Path,
-        default=ROOT / "assets/esci-lexical-fresh-5k.json",
+        default=ROOT / "assets/esci-benchmark-seed42.json",
     )
     parser.add_argument("--readme", type=Path, default=ROOT / "README.md")
     args = parser.parse_args()
@@ -243,13 +178,7 @@ def main():
     aggregate = (
         json.loads(args.aggregate.read_text(encoding="utf-8")) if args.aggregate.exists() else {}
     )
-    fresh_lexical = (
-        json.loads(args.lexical_aggregate.read_text(encoding="utf-8"))
-        if args.lexical_aggregate.exists() else None
-    )
-    replacement = render_block(
-        aggregate, args.readme.parent / "assets", fresh_lexical
-    )
+    replacement = render_block(aggregate, args.readme.parent / "assets")
     args.readme.write_text(readme[:first] + replacement + readme[last:], encoding="utf-8")
 
 
