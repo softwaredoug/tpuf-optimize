@@ -39,12 +39,16 @@ class Searcher:
         namespace: NamespaceSearcher,
         strategy: TPufStrategy,
         batch_size: int = 100,
+        lexical_rerank: bool = False,
+        lexical_rerank_boost: float = TPufStrategy.LEXICAL_RERANK_MAX_BOOST,
     ) -> None:
         if batch_size < 1:
             raise ValueError("batch_size must be greater than zero")
         self.namespace = namespace
         self.strategy = strategy
         self.batch_size = batch_size
+        self.lexical_rerank = lexical_rerank
+        self.lexical_rerank_boost = lexical_rerank_boost
 
     def search(
         self, requests: Iterable[SearchRequest], top_k: int
@@ -64,4 +68,9 @@ class Searcher:
                     "Turbopuffer returned a different number of results than queries"
                 )
             for request, result in zip(request_batch, response.results):
-                yield request, result.rows or []
+                rows = result.rows or []
+                if self.lexical_rerank:
+                    rows = self.strategy.rerank_lexically(
+                        request.text, rows, self.lexical_rerank_boost
+                    )
+                yield request, rows

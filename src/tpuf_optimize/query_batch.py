@@ -80,6 +80,17 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--top-k", type=int, default=10)
     parser.add_argument("--batch-size", type=int, default=100)
+    parser.add_argument(
+        "--lexical-rerank",
+        action="store_true",
+        help="apply a bounded lexical position adjustment to BM25 candidates",
+    )
+    parser.add_argument(
+        "--lexical-rerank-boost",
+        type=float,
+        default=TPufStrategy.LEXICAL_RERANK_MAX_BOOST,
+        help="maximum normalized score adjustment (0 through 1)",
+    )
     return parser
 
 
@@ -90,6 +101,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--top-k must be greater than zero")
     if args.batch_size < 1:
         parser.error("--batch-size must be greater than zero")
+    if not 0.0 <= args.lexical_rerank_boost <= 1.0:
+        parser.error("--lexical-rerank-boost must be between 0 and 1")
     if not os.environ.get("TURBOPUFFER_API_KEY"):
         parser.error("Set TURBOPUFFER_API_KEY before querying.")
 
@@ -97,8 +110,19 @@ def main(argv: list[str] | None = None) -> int:
         requests = _read_queries(args.queries)
         with Turbopuffer(region=args.region) as client:
             namespace = client.namespace(args.namespace)
-            searcher = Searcher(namespace, TPufStrategy(), args.batch_size)
-            _write_results(args.output, requests, searcher, args.top_k)
+            searcher = Searcher(
+                namespace,
+                TPufStrategy(),
+                args.batch_size,
+                lexical_rerank=args.lexical_rerank,
+                lexical_rerank_boost=args.lexical_rerank_boost,
+            )
+            _write_results(
+                args.output,
+                requests,
+                searcher,
+                args.top_k,
+            )
     except (OSError, ValueError) as error:
         parser.error(str(error))
 
