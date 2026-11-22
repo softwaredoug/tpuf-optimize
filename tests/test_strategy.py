@@ -200,10 +200,17 @@ class TPufStrategyTests(unittest.TestCase):
                 "blue shoe", "us"
             )
         )
+        combined = str(
+            TPufStrategy(
+                field_fusion="passage_fold_brand_whitespace"
+            ).rank_by("blue shoe", "us")
+        )
 
         self.assertNotIn("passage__word_v4__fold", baseline)
         self.assertIn("passage__word_v4__fold", passage_fold)
         self.assertIn("brand__whitespace__default", brand_whitespace)
+        self.assertIn("passage__word_v4__fold", combined)
+        self.assertIn("brand__whitespace__default", combined)
         with self.assertRaises(ValueError):
             TPufStrategy(field_fusion="unknown")
 

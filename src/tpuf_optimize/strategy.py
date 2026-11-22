@@ -28,6 +28,10 @@ class TPufStrategy:
     FIELD_FUSION_CHANNELS = {
         "passage_fold": (("passage__word_v4__fold", 0.5),),
         "brand_whitespace": (("brand__whitespace__default", 0.5),),
+        "passage_fold_brand_whitespace": (
+            ("passage__word_v4__fold", 0.5),
+            ("brand__whitespace__default", 0.5),
+        ),
     }
 
     def __init__(self, field_fusion: str = "none") -> None:
