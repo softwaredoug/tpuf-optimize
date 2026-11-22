@@ -73,13 +73,13 @@ NDCG@10 by `+0.000512` (paired 95% CI `[-0.000896, +0.001856]`). The measured
 holdout result is positive but uncertain; the feature remains opt-in. Only
 aggregate holdout results are recorded.
 
-No latency benchmark was performed. Phrase filters may add query latency.
+Phrase filters may add query latency. A later timed benchmark is recorded below.
 
-## New 5,000-query matched lexical benchmark
+## Preliminary 5,000-query NDCG-only screen (separate split)
 
-On a separate fresh Referee session, the lexical variants below used the same
-5,000 queries. Disjoint NDCG excludes the 149 queries matched to 62 historical
-task artifacts.
+This earlier screening run did not record latency and is not the timed
+benchmark below. The three variants shared one fresh Referee session; disjoint
+NDCG excludes the 149 queries matched to 62 historical task artifacts.
 
 | Variant | NDCG@10 (full) | NDCG@10 (disjoint) |
 | --- | ---: | ---: |
@@ -91,4 +91,23 @@ The opt-in fuzzy-position variant improved over c46 by `+0.021290` paired
 (95% bootstrap CI `[+0.018725, +0.023739]`). Its incremental gain over the RMS
 stack was `+0.000343` (95% CI `[-0.000162, +0.000869]`), so the `0.39` target
 was crossed on the full split but not on the artifact-disjoint subset, and the
-small incremental gain is uncertain. No latency measurements were taken.
+small incremental gain is uncertain.
+
+## Fresh matched 5,000-query timed benchmark
+
+This subsequent fresh Referee run records both NDCG and successful-attempt
+latency, with one query per batch. The disjoint subset contains 4,819 queries
+after excluding 181 matches to 62 historical task artifacts.
+
+| Variant | NDCG@10 (full) | NDCG@10 (disjoint) | p50 (ms) | p95 (ms) | 429 retries |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| c46 passage BM25 + fuzzy title/brand | 0.370765 | 0.371805 | 69.22 | 114.81 | 0 |
+| RMS lexical stack | 0.387974 | 0.389259 | 91.40 | 150.97 | 0 |
+| RMS stack + fuzzy-position boost `0.15` | 0.388344 | 0.389554 | 94.09 | 162.60 | 0 |
+
+The RMS stack improved over c46 by `+0.017209` paired (95% CI
+`[+0.014618, +0.019824]`). The fuzzy-position variant improved over c46 by
+`+0.017579` (95% CI `[+0.015031, +0.020238]`), but its increment over the RMS
+stack was only `+0.000371` (95% CI `[-0.000150, +0.000906]`). The full-split
+`0.39` target was not reached in this timed run. Separate p50/p95 Pareto charts
+for these three variants are linked in the repository README.
