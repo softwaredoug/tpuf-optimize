@@ -38,30 +38,84 @@ class Searcher:
         self,
         namespace: NamespaceSearcher,
         strategy: TPufStrategy,
-        batch_size: int = 100,
+        batch_size: int = 16,
+        lexical_candidate_fusion: bool = False,
     ) -> None:
         if batch_size < 1:
             raise ValueError("batch_size must be greater than zero")
         self.namespace = namespace
         self.strategy = strategy
         self.batch_size = batch_size
+        self.lexical_candidate_fusion = lexical_candidate_fusion
+        self.lexical_stats = {
+            "arm_queries": 0,
+            "zero_result_arms": 0,
+            "union_candidates": 0,
+        }
 
     def search(
         self, requests: Iterable[SearchRequest], top_k: int
     ) -> Iterator[tuple[SearchRequest, list[Row]]]:
         """Yield each request with its rows, issuing one API call per batch."""
         iterator = iter(requests)
+        arm_count = 4 if self.lexical_candidate_fusion else 1
+        request_batch_size = min(self.batch_size, 16 // arm_count)
         while request_batch := list(
-            itertools.islice(iterator, self.batch_size)
+            itertools.islice(iterator, request_batch_size)
         ):
-            queries = [
-                self.strategy.query(request.text, request.locale, top_k)
-                for request in request_batch
-            ]
+            if self.lexical_candidate_fusion:
+                queries = [
+                    query
+                    for request in request_batch
+                    for query in (
+                        self.strategy.query(request.text, request.locale, 50),
+                        *self.strategy.lexical_candidate_queries(
+                            request.text, request.locale, 50
+                        ),
+                    )
+                ]
+            else:
+                queries = [
+                    self.strategy.query(request.text, request.locale, top_k)
+                    for request in request_batch
+                ]
             response = self.namespace.multi_query(queries=queries)
-            if len(response.results) != len(request_batch):
+            if len(response.results) != len(queries):
                 raise ValueError(
                     "Turbopuffer returned a different number of results than queries"
                 )
-            for request, result in zip(request_batch, response.results):
-                yield request, result.rows or []
+            if self.lexical_candidate_fusion:
+                for request_number, request in enumerate(request_batch):
+                    start = request_number * arm_count
+                    arm_results = response.results[start:start + arm_count]
+                    arm_rows = [result.rows or [] for result in arm_results]
+                    self.lexical_stats["arm_queries"] += len(arm_rows)
+                    self.lexical_stats["zero_result_arms"] += sum(
+                        not rows for rows in arm_rows
+                    )
+                    fused_rows = self._reciprocal_rank_fusion(arm_rows)
+                    self.lexical_stats["union_candidates"] += len(fused_rows)
+                    yield request, fused_rows[:top_k]
+            else:
+                for request, result in zip(request_batch, response.results):
+                    yield request, result.rows or []
+
+    @staticmethod
+    def _reciprocal_rank_fusion(arm_rows: list[list[Row]]) -> list[Row]:
+        """Merge independent lexical candidate lists by reciprocal rank."""
+        rank_constant = 20
+        scores: dict[str, float] = {}
+        documents: dict[str, Row] = {}
+        for rows in arm_rows:
+            for rank, row in enumerate(rows, start=1):
+                document_id = str(row.id)
+                scores[document_id] = scores.get(document_id, 0.0) + 1 / (
+                    rank_constant + rank
+                )
+                documents.setdefault(document_id, row)
+        return [
+            documents[document_id]
+            for document_id in sorted(
+                scores, key=lambda document_id: (-scores[document_id], document_id)
+            )
+        ]

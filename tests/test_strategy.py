@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
+from typing import cast
 
 import pandas as pd
+from turbopuffer.types import Row
 
+from tpuf_optimize.searcher import Searcher
 from tpuf_optimize.strategy import TPufStrategy
 
 
@@ -125,6 +129,53 @@ class TPufStrategyTests(unittest.TestCase):
         self.assertIn("title__word_v4__es__stem_stop_fold", str(es_query["rank_by"]))
         self.assertIn("passage__kuromoji__ja", str(jp_query["rank_by"]))
         self.assertIn("title__kuromoji__ja", str(jp_query["rank_by"]))
+
+    def test_candidate_queries_are_filter_only_side_channels(self) -> None:
+        queries = self.strategy.lexical_candidate_queries(
+            "blue shoe", "us", top_k=30
+        )
+
+        self.assertEqual(len(queries), 3)
+        self.assertEqual(
+            queries[0]["filters"],
+            (
+                "And",
+                (
+                    ("locale", "Eq", "us"),
+                    (
+                        "title__word_v4__en__stem_stop",
+                        "ContainsAllTokens",
+                        "blue shoe",
+                    ),
+                ),
+            ),
+        )
+        self.assertEqual(queries[1]["rank_by"][0], "passage__word_v4__en__stem_stop")
+        self.assertEqual(queries[1]["filters"][1][1][1], "ContainsTokenSequence")
+        self.assertEqual(queries[2]["rank_by"][0], "brand__word_v4__default")
+
+    def test_candidate_query_supports_japanese_locale(self) -> None:
+        queries = self.strategy.lexical_candidate_queries("青い靴", "jp", top_k=10)
+
+        self.assertEqual(queries[0]["rank_by"][0], "title__kuromoji__ja")
+        self.assertEqual(queries[1]["rank_by"][0], "passage__kuromoji__ja")
+
+    def test_union_fusion_deduplicates_and_rewards_cross_arm_matches(self) -> None:
+        title_match = cast(Row, SimpleNamespace(id="title-match"))
+        consensus_match = cast(Row, SimpleNamespace(id="consensus-match"))
+        passage_match = cast(Row, SimpleNamespace(id="passage-match"))
+
+        fused = Searcher._reciprocal_rank_fusion(
+            [
+                [title_match, consensus_match],
+                [consensus_match, passage_match],
+            ]
+        )
+
+        self.assertEqual(
+            [row.id for row in fused],
+            ["consensus-match", "title-match", "passage-match"],
+        )
 
     def test_rank_by_adds_fuzzy_boosts_for_long_latin_terms(self) -> None:
         rank_by = str(self.strategy.rank_by("blue running shoe", "us"))
