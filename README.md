@@ -69,6 +69,49 @@ with title weighted twice as heavily. Queries with no hits are emitted with the
 construction. The outer `Indexer` and `Searcher` handle batched namespace I/O,
 so relevance experiments can focus on the strategy without changing the runners.
 
+## Experiment: one-request lexical reranking
+
+`experiment/lexical-one-query-rerank` is based on `main` and does not change the
+index schema. `SingleRequestLexicalStrategy` issues the cdb2d64-style locale
+filtered query: title BM25 at weight 1.0 plus passage BM25 at weight 0.5, with
+`top_k=100` and the existing title, description, brand, and locale attributes
+returned. `search_one` makes one serial `namespace.query` call; reranking only
+uses those results.
+
+The reranker combines the original candidate rank with exact local evidence:
+
+```text
+local =
+    0.45 * unique-query-term coverage in title
+  + 0.20 * adjacent query-pair coverage in title
+  + 0.15 * exact title phrase
+  + 0.10 * unique-query-term coverage in brand
+  + 0.10 * unique-query-term coverage in description
+score = (1 - boost) * normalized_original_rank + boost * local
+```
+
+Boost `0.35` was selected from `{0.05, 0.10, 0.20, 0.35}` on a deterministic,
+query-disjoint 105-query validation fold of the assigned Referee training
+split; it was positive on the remaining 395 queries as well. There is no query
+fan-out, candidate union, embedding, second attribute fetch, or reindex.
+
+### Training-split result
+
+| Variant | Referee queries | NDCG@10 | p50 latency | p95 latency | Requests/query |
+|---|---:|---:|---:|---:|---:|
+| cdb2d64 one-request BM25 | 500 | 0.36803 | 68.67 ms | 81.25 ms | 1 |
+| BM25 + local lexical rerank (boost 0.35) | 500 | 0.38922 | 78.77 ms | 99.47 ms | 1 |
+
+The paired NDCG@10 change is **+0.02119** (95% paired bootstrap interval
+**[+0.01392, +0.02929]**); on the disjoint 395-query selection-train fold the
+change was **+0.02035**. The 105-query selection-validation-fold change was
+**+0.02433**. Across all queries, 207 improved, 171 were unchanged, and 122
+declined. Latencies are unbatched successful network time; candidate latency
+also includes local reranking. They were measured in a separate fresh serial
+pass from the NDCG submissions. The returned title/description/brand values
+were non-empty for 100.0% / 49.3% / 93.8% of top-100 candidates, respectively.
+Private holdout validation is pending.
+
 ## ESCI 5,000-query leaderboard
 
 Every variant in the table and Pareto charts uses one Referee session created
