@@ -74,3 +74,21 @@ holdout result is positive but uncertain; the feature remains opt-in. Only
 aggregate holdout results are recorded.
 
 No latency benchmark was performed. Phrase filters may add query latency.
+
+## New 5,000-query matched lexical benchmark
+
+On a separate fresh Referee session, the lexical variants below used the same
+5,000 queries. Disjoint NDCG excludes the 149 queries matched to 62 historical
+task artifacts.
+
+| Variant | NDCG@10 (full) | NDCG@10 (disjoint) |
+| --- | ---: | ---: |
+| c46 passage BM25 + fuzzy title/brand | 0.368813 | 0.368299 |
+| RMS lexical stack | 0.389760 | 0.388867 |
+| RMS stack + fuzzy-position boost `0.15` | 0.390103 | 0.389176 |
+
+The opt-in fuzzy-position variant improved over c46 by `+0.021290` paired
+(95% bootstrap CI `[+0.018725, +0.023739]`). Its incremental gain over the RMS
+stack was `+0.000343` (95% CI `[-0.000162, +0.000869]`), so the `0.39` target
+was crossed on the full split but not on the artifact-disjoint subset, and the
+small incremental gain is uncertain. No latency measurements were taken.
