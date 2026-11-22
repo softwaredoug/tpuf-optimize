@@ -19,22 +19,25 @@ from test_searcher import FakeNamespace
 class BenchmarkTests(unittest.TestCase):
     def test_retry_times_only_the_successful_attempt_and_amortizes(self):
         namespace = FakeNamespace()
+        namespace.rate_limits_remaining = 1
         requests = _read_requests()
         with (
-            patch.object(namespace, "multi_query", side_effect=[
-                namespace.rate_limit_error(),
-                namespace.multi_query(queries=[{}, {}]),
-            ]),
+            patch.object(namespace, "multi_query") as multi_query,
             patch("tpuf_optimize.searcher.time.sleep") as sleep,
             patch("tpuf_optimize.searcher.time.perf_counter", side_effect=[1, 10, 10.25]),
         ):
-            rows, elapsed, retries = Searcher(namespace, TPufStrategy()).measure_batch(
-                requests, top_k=10,
-            )
+            rows, elapsed, retries = Searcher(
+                namespace,
+                TPufStrategy(),
+                serial_requests=True,
+            ).measure_batch(requests[:1], top_k=10)
 
-        self.assertEqual((rows, elapsed, retries), ([[], []], 125, 1))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(elapsed, 250)
+        self.assertEqual(retries, 1)
         sleep.assert_called_once()
-        self.assertEqual(namespace.serial_calls, 0)
+        multi_query.assert_not_called()
+        self.assertEqual(namespace.serial_calls, 2)
 
     def test_resume_reuses_only_completed_progress_of_the_same_run(self):
         requests = _read_requests()

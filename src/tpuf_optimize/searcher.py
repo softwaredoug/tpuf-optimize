@@ -10,13 +10,11 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
-from typing import Any, Callable, Protocol, TypeVar, cast
+from typing import Any, Callable, TypeVar, cast
 
 from turbopuffer._exceptions import APIError, RateLimitError
 from turbopuffer.types import Row
 from turbopuffer.types.namespace_multi_query_params import Query
-from turbopuffer.types.namespace_multi_query_response import NamespaceMultiQueryResponse
-
 from tpuf_optimize.strategy import TPufStrategy
 
 _Result = TypeVar("_Result")
@@ -32,14 +30,6 @@ class SearchRequest:
     locale: str
 
 
-class NamespaceSearcher(Protocol):
-    """The namespace multi-query surface required by Searcher."""
-
-    def multi_query(
-        self, *, queries: Iterable[Query]
-    ) -> NamespaceMultiQueryResponse: ...
-
-
 class Searcher:
     """Batch search requests and preserve their input order."""
 
@@ -49,15 +39,17 @@ class Searcher:
 
     def __init__(
         self,
-        namespace: NamespaceSearcher,
+        namespace: Any,
         strategy: TPufStrategy,
         batch_size: int = MAX_QUERIES_PER_BATCH,
+        serial_requests: bool = False,
     ) -> None:
         if batch_size < 1:
             raise ValueError("batch_size must be greater than zero")
         self.namespace = namespace
         self.strategy = strategy
         self.batch_size = min(batch_size, self.MAX_QUERIES_PER_BATCH)
+        self.serial_requests = serial_requests
 
     @staticmethod
     def _retry_after_seconds(error: RateLimitError) -> float:
@@ -85,11 +77,23 @@ class Searcher:
         self, operation: Callable[[], _Result]
     ) -> _Result:
         """Retry a request with jittered exponential backoff for at most 5 minutes."""
+        result, _elapsed_ms, _retry_count = (
+            self._with_rate_limit_backoff_measured(operation)
+        )
+        return result
+
+    def _with_rate_limit_backoff_measured(
+        self, operation: Callable[[], _Result]
+    ) -> tuple[_Result, float, int]:
+        """Return the successful attempt's latency and number of 429 retries."""
         started_at = time.monotonic()
         attempt = 0
         while True:
+            request_started = time.perf_counter()
             try:
-                return operation()
+                result = operation()
+                elapsed_ms = (time.perf_counter() - request_started) * 1000
+                return result, elapsed_ms, attempt
             except RateLimitError as error:
                 elapsed = time.monotonic() - started_at
                 remaining = self.MAX_RETRY_WAIT_SECONDS - elapsed
@@ -115,12 +119,12 @@ class Searcher:
                 attempt += 1
 
     def _query_serially(self, queries: list[Query]) -> list[list[Row]]:
-        """Run queries one at a time through the serial namespace query API."""
+        """Run one HTTP query request for each input query."""
         serial_query = getattr(self.namespace, "query", None)
         if not callable(serial_query):
             raise RuntimeError(
-                "Namespace does not provide the serial query API required "
-                "after a multi-query failure"
+                "Namespace does not provide the single-query API required "
+                "by this lexical strategy"
             )
 
         results: list[list[Row]] = []
@@ -132,7 +136,7 @@ class Searcher:
         return results
 
     def _query_batch(self, queries: list[Query]) -> list[list[Row]]:
-        """Run one bounded multi-query batch, falling back to serial calls."""
+        """Run a bounded multi-query request, falling back to serial calls."""
         try:
             response = self._with_rate_limit_backoff(
                 lambda: self.namespace.multi_query(queries=queries)
@@ -140,8 +144,7 @@ class Searcher:
             if len(response.results) == len(queries):
                 return [result.rows or [] for result in response.results]
             logger.warning(
-                "multi_query returned %d results for %d queries; "
-                "retrying serially",
+                "multi_query returned %d results for %d queries; retrying serially",
                 len(response.results),
                 len(queries),
             )
@@ -150,13 +153,12 @@ class Searcher:
                 "multi_query batch failed; retrying %d queries serially",
                 len(queries),
             )
-
         return self._query_serially(queries)
 
     def search(
         self, requests: Iterable[SearchRequest], top_k: int
     ) -> Iterator[tuple[SearchRequest, list[Row]]]:
-        """Yield each request with its rows, issuing one API call per batch."""
+        """Yield each request in order, issuing one serial API call per query."""
         iterator = iter(requests)
         while request_batch := list(
             itertools.islice(iterator, self.batch_size)
@@ -165,39 +167,48 @@ class Searcher:
                 self.strategy.query(request.text, request.locale, top_k)
                 for request in request_batch
             ]
-            rows_by_query = self._query_batch(queries)
+            rows_by_query = (
+                self._query_serially(queries)
+                if self.serial_requests
+                else self._query_batch(queries)
+            )
             for request, rows in zip(request_batch, rows_by_query):
                 yield request, rows
 
     def _retrieve_measured_batch(
         self, requests: list[SearchRequest], top_k: int
     ) -> list[list[Row]]:
+        """Retrieve a batch; serial mode insists on exactly one query request."""
         queries = [
             self.strategy.query(request.text, request.locale, top_k)
             for request in requests
         ]
+        if self.serial_requests:
+            if len(requests) != 1:
+                raise ValueError("Measured serial requests must contain one query")
+            serial_query = getattr(self.namespace, "query", None)
+            if not callable(serial_query):
+                raise RuntimeError("Namespace does not provide the single-query API")
+            response = cast(Any, serial_query)(**queries[0])
+            return [response.rows or []]
+
         response = self.namespace.multi_query(queries=queries)
+        if len(response.results) != len(requests):
+            raise ValueError("Incomplete response for measured query batch")
         return [result.rows or [] for result in response.results]
 
     def measure_batch(
         self, requests: list[SearchRequest], top_k: int
     ) -> tuple[list[list[Row]], float, int]:
-        """Return rankings, successful-attempt ms per query, and 429 retries."""
+        """Return one ranking, successful request latency, and 429 retries."""
         if not 1 <= len(requests) <= self.batch_size:
             raise ValueError("Measured batch must fit the configured batch size")
-        attempts = 0
-
-        def run() -> tuple[list[list[Row]], float]:
-            nonlocal attempts
-            attempts += 1
-            start = time.perf_counter()
-            rows = self._retrieve_measured_batch(requests, top_k)
-            if len(rows) != len(requests):
-                raise ValueError("Incomplete response for measured query batch")
-            rows = [hits[:top_k] for hits in rows]
-            return rows, (time.perf_counter() - start) * 1000 / len(requests)
-
-        # No serial fallback: it would silently change the measured workload.
-        # The caller must disable SDK retries so every 429 is visible here.
-        rows, elapsed = self._with_rate_limit_backoff(run)
-        return rows, elapsed, attempts - 1
+        if self.serial_requests and len(requests) != 1:
+            raise ValueError("Measured serial requests must contain one query")
+        rows, elapsed, retries = self._with_rate_limit_backoff_measured(
+            lambda: self._retrieve_measured_batch(requests, top_k)
+        )
+        if len(rows) != len(requests):
+            raise ValueError("Incomplete response for measured query batch")
+        top_rows = [hits[:top_k] for hits in rows]
+        return top_rows, elapsed / len(requests), retries

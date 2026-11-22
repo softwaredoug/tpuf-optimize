@@ -139,7 +139,12 @@ def main(argv: list[str] | None = None) -> int:
         )
         with client:
             namespace = client.namespace(args.namespace)
-            searcher = Searcher(namespace, TPufStrategy(), batch_size)
+            searcher = Searcher(
+                namespace,
+                TPufStrategy(),
+                batch_size,
+                serial_requests=True,
+            )
             if args.benchmark_db:
                 run_benchmark(
                     args.benchmark_db, args.output, requests, searcher, args.top_k,

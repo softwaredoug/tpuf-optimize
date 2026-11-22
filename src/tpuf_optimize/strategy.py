@@ -15,8 +15,12 @@ from turbopuffer.types.namespace_multi_query_params import Query
 class TPufStrategy:
     """Own the fields, analyzers, embeddings, and queries under experimentation."""
 
-    TITLE_WEIGHT = 2.0
-    DESCRIPTION_WEIGHT = 1.0
+    PASSAGE_BASELINE_WEIGHTS = (("title", 1.0), ("passage", 0.5))
+    COMPOSITE_WEIGHTS = (
+        ("title", 1.0),
+        ("passage", 0.5),
+        ("brand", 0.25),
+    )
 
     EMBEDDING_MODEL = "voyage/voyage-4"
     EMBEDDING_DIMS = 1024
@@ -130,6 +134,12 @@ class TPufStrategy:
     EMBEDDING_FIELDS = {
         "passage__embed__voyage_4": ("embedding__voyage_4__passage", "passage"),
     }
+
+    def __init__(self, variant: str = "composite") -> None:
+        """Select a single-request lexical ranker; no schema changes are needed."""
+        if variant not in {"composite", "passage_baseline"}:
+            raise ValueError(f"Unknown lexical variant: {variant}")
+        self.variant = variant
 
     @property
     def distance_metric(self) -> DistanceMetric:
@@ -288,26 +298,27 @@ class TPufStrategy:
             emitted += 1
 
     def rank_by(self, query_text: str, locale: str) -> RankBy:
-        """Build the locale-appropriate weighted title/description BM25 query."""
+        """Build one locale-aware weighted BM25 expression over lexical fields."""
         locale_analyzer = self.LOCALE_ANALYZERS.get(locale)
         suffix = (
             locale_analyzer[0]
             if locale_analyzer is not None
             else self.DEFAULT_ANALYZER
         )
+        weights = (
+            self.PASSAGE_BASELINE_WEIGHTS
+            if self.variant == "passage_baseline"
+            else self.COMPOSITE_WEIGHTS
+        )
         return (
             "Sum",
-            (
+            tuple(
                 (
                     "Product",
-                    self.TITLE_WEIGHT,
-                    (f"title__{suffix}", "BM25", query_text),
-                ),
-                (
-                    "Product",
-                    self.DESCRIPTION_WEIGHT,
-                    (f"description__{suffix}", "BM25", query_text),
-                ),
+                    weight,
+                    (f"{field}__{suffix}", "BM25", query_text),
+                )
+                for field, weight in weights
             ),
         )
 
