@@ -11,12 +11,12 @@ ROOT = Path(__file__).resolve().parents[1]
 START = "<!-- esci-benchmark:start -->"
 END = "<!-- esci-benchmark:end -->"
 CATEGORY_LABELS = {
-    "Pure lexical": "(a) Pure lexical",
-    "Hybrid (lexical + embedding)": "(b) Hybrid",
-    "Learned reranker": "(c) Learned reranker",
-    "Third-party reranker": "(d) Third-party reranker",
-    "Pure embedding": "Pure embedding (additional)",
-    "Handcrafted reranker": "Handcrafted reranker (additional)",
+    "Lexical": "Lexical",
+    "Hybrid (lexical + embedding)": "Hybrid",
+    "Learned reranker": "Learned reranker",
+    "Third-party reranker": "Third-party reranker",
+    "Embedding": "Embedding",
+    "Handcrafted reranker": "Handcrafted reranker",
 }
 
 
@@ -38,10 +38,9 @@ def render_block(aggregate, assets):
             f"The second NDCG column covers the {disjoint:,} queries not found in "
             f"{aggregate['checked_artifacts']} available historical task artifacts.",
             "",
-            "Classes: (a) pure lexical; (b) lexical + embedding; "
-            "(c) locally learned reranker; (d) third-party reranker. "
-            "Pure embedding and handcrafted reranking are listed separately "
-            "because they do not fit those four definitions.",
+            "Classes: lexical; hybrid (lexical + embedding); learned reranker; "
+            "third-party reranker. Embedding-only retrieval and handcrafted "
+            "reranking are shown separately because they do not fit those four.",
             "",
         ]
     lines += [

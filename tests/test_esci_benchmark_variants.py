@@ -29,11 +29,11 @@ class Namespace:
 class FrozenVariantTests(unittest.TestCase):
     def test_each_leader_has_an_explicit_strategy_class(self):
         categories = {variant.slug: variant.category for variant in VARIANTS}
-        self.assertEqual(categories["bm25"], "Pure lexical")
+        self.assertEqual(categories["bm25"], "Lexical")
         self.assertEqual(categories["hybrid"], "Hybrid (lexical + embedding)")
         self.assertEqual(categories["typed"], "Learned reranker")
         self.assertEqual(categories["voyage-rerank"], "Third-party reranker")
-        self.assertEqual(categories["voyage"], "Pure embedding")
+        self.assertEqual(categories["voyage"], "Embedding")
         self.assertEqual(categories["product"], "Handcrafted reranker")
 
     def test_all_variants_rank_independently_on_every_execution(self):
