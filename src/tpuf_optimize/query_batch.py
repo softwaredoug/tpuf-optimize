@@ -109,6 +109,12 @@ def _parser() -> argparse.ArgumentParser:
         help="aggregate per-field lexical position evidence with a weighted mean or RMS",
     )
     parser.add_argument(
+        "--lexical-fuzzy-position-boost",
+        type=float,
+        default=0.0,
+        help="boost one-edit fuzzy token matches in returned title and brand text",
+    )
+    parser.add_argument(
         "--field-fusion",
         choices=("none", *TPufStrategy.FIELD_FUSION_CHANNELS),
         default="none",
@@ -128,6 +134,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--lexical-rerank-boost must be between 0 and 1")
     if not 0.0 <= args.lexical_cross_field_boost <= 1.0:
         parser.error("--lexical-cross-field-boost must be between 0 and 1")
+    if not 0.0 <= args.lexical_fuzzy_position_boost <= 1.0:
+        parser.error("--lexical-fuzzy-position-boost must be between 0 and 1")
     if not os.environ.get("TURBOPUFFER_API_KEY"):
         parser.error("Set TURBOPUFFER_API_KEY before querying.")
 
@@ -144,6 +152,7 @@ def main(argv: list[str] | None = None) -> int:
                 lexical_rerank_boost=args.lexical_rerank_boost,
                 lexical_cross_field_boost=args.lexical_cross_field_boost,
                 lexical_position_aggregation=args.lexical_position_aggregation,
+                lexical_fuzzy_position_boost=args.lexical_fuzzy_position_boost,
             )
             _write_results(
                 args.output,

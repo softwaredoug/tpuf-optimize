@@ -7,7 +7,9 @@ candidate channels: all-token title, exact-phrase passage, and exact-phrase
 brand. Fuse their top-50 result lists with reciprocal-rank fusion (constant
 20), cap the union at 50 candidates, then apply the deterministic lexical
 position reranker with a maximum boost of `0.18`. The reranker uses only
-returned title, description, and brand text. The final result is truncated to
+returned title, description, and brand text. An opt-in `0.15` fuzzy positional
+bonus further rewards one-edit matches of long query tokens in returned title
+and brand text; it is disabled for Japanese. The final result is truncated to
 10. This uses existing indexed data and no embedding or external model.
 
 ## Reproduction
@@ -19,6 +21,7 @@ uv run query --queries queries.csv --output results.csv \
   --lexical-candidate-fusion --lexical-rerank \
   --lexical-cross-field-boost 0.03 \
   --lexical-position-aggregation rms \
+  --lexical-fuzzy-position-boost 0.15 \
   --field-fusion passage_fold_brand_whitespace
 ```
 
@@ -32,6 +35,7 @@ uv run query --queries queries.csv --output results.csv \
 | Candidate union + position + passage-fold BM25 (0.5) | 0.386081 | 0.382376 |
 | Previous stack + whitespace-brand BM25 (0.5) | 0.386874 | 0.383537 |
 | Previous stack + RMS position aggregation | 0.387749 | 0.383781 |
+| RMS stack + one-edit fuzzy positional bonus (0.15) | 0.388490 | 0.384293 |
 
 The combined candidate's training delta over baseline was `+0.015441`; paired
 bootstrap 95% CI: `[+0.010990, +0.020080]`. It added `+0.001236` over union
@@ -61,5 +65,12 @@ RMS position aggregation added `+0.001253` over weighted mean on a disjoint
 training validation fold (paired bootstrap 95% CI: `[+0.000020, +0.003156]`)
 and `+0.000244` on matched holdout tasks. The `weighted_mean` default remains
 unchanged for compatibility; RMS is an opt-in experimental mode.
+
+The one-edit fuzzy positional bonus at weight `0.15` raised full training by
+`+0.000741` and the disjoint training validation fold by `+0.000832` (paired
+95% CI `[-0.001036, +0.002667]`). On matched private holdout it changed
+NDCG@10 by `+0.000512` (paired 95% CI `[-0.000896, +0.001856]`). The measured
+holdout result is positive but uncertain; the feature remains opt-in. Only
+aggregate holdout results are recorded.
 
 No latency benchmark was performed. Phrase filters may add query latency.

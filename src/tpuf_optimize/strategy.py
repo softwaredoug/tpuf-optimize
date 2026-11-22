@@ -599,6 +599,63 @@ class TPufStrategy:
         )
         return max(0.0, union_coverage - best_single_coverage)
 
+    @staticmethod
+    def _within_one_edit(left: str, right: str) -> bool:
+        """Return whether two distinct tokens differ by one edit."""
+        if left == right or abs(len(left) - len(right)) > 1:
+            return False
+        if len(left) == len(right):
+            return sum(a != b for a, b in zip(left, right)) == 1
+
+        shorter, longer = (
+            (left, right) if len(left) < len(right) else (right, left)
+        )
+        short_index = 0
+        long_index = 0
+        edits = 0
+        while short_index < len(shorter) and long_index < len(longer):
+            if shorter[short_index] == longer[long_index]:
+                short_index += 1
+                long_index += 1
+                continue
+            edits += 1
+            long_index += 1
+            if edits > 1:
+                return False
+        return True
+
+    @classmethod
+    def lexical_fuzzy_position_score(
+        cls, query_text: str, title: str | None, brand: str | None,
+        locale: str,
+    ) -> float:
+        """Score one-edit query-token matches in title and brand text."""
+        if locale == "jp":
+            return 0.0
+        query_terms = [
+            term
+            for term in cls._position_tokens(query_text)
+            if len(term) >= cls.FUZZY_QUERY_MIN_CHARS
+        ]
+        if not query_terms:
+            return 0.0
+
+        title_terms = cls._position_tokens(title or "")
+        brand_terms = cls._position_tokens(brand or "")
+        title_exact = set(title_terms)
+        brand_exact = set(brand_terms)
+        title_coverage = sum(
+            term not in title_exact
+            and any(cls._within_one_edit(term, candidate) for candidate in title_terms)
+            for term in query_terms
+        ) / len(query_terms)
+        brand_coverage = sum(
+            term not in brand_exact
+            and any(cls._within_one_edit(term, candidate) for candidate in brand_terms)
+            for term in query_terms
+        ) / len(query_terms)
+        return 0.75 * title_coverage + 0.25 * brand_coverage
+
     @classmethod
     def rerank_lexically(
         cls,
@@ -607,12 +664,16 @@ class TPufStrategy:
         max_boost: float = LEXICAL_RERANK_MAX_BOOST,
         cross_field_boost: float = 0.0,
         position_aggregation: str = "weighted_mean",
+        fuzzy_position_boost: float = 0.0,
+        locale: str = "us",
     ) -> list[Row]:
-        """Apply bounded position and optional cross-field lexical adjustments."""
+        """Apply bounded position and optional lexical score adjustments."""
         if not 0.0 <= max_boost <= 1.0:
             raise ValueError("max_boost must be between 0 and 1")
         if not 0.0 <= cross_field_boost <= 1.0:
             raise ValueError("cross_field_boost must be between 0 and 1")
+        if not 0.0 <= fuzzy_position_boost <= 1.0:
+            raise ValueError("fuzzy_position_boost must be between 0 and 1")
         if position_aggregation not in cls.LEXICAL_POSITION_AGGREGATIONS:
             raise ValueError(
                 f"Unknown lexical position aggregation {position_aggregation!r}; "
@@ -646,10 +707,18 @@ class TPufStrategy:
                 if cross_field_boost
                 else 0.0
             )
+            fuzzy_position_score = (
+                cls.lexical_fuzzy_position_score(
+                    query_text, title, brand, locale
+                )
+                if fuzzy_position_boost
+                else 0.0
+            )
             parent_utility = 1.0 - (original_rank / denominator)
             return (
                 parent_utility + max_boost * score
-                + cross_field_boost * cross_field_score,
+                + cross_field_boost * cross_field_score
+                + fuzzy_position_boost * fuzzy_position_score,
                 -original_rank,
             )
 

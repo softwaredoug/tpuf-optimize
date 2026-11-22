@@ -190,6 +190,26 @@ class TPufStrategyTests(unittest.TestCase):
         self.assertIn("passage__kuromoji__ja", rank_by)
         self.assertNotIn("__fuzzy", rank_by)
 
+    def test_fuzzy_position_score_matches_one_edit_in_title_or_brand(self) -> None:
+        title_match = self.strategy.lexical_fuzzy_position_score(
+            "laptops", "Laptop case", None, "us"
+        )
+        brand_match = self.strategy.lexical_fuzzy_position_score(
+            "laptops", None, "Laptop", "us"
+        )
+        exact_match = self.strategy.lexical_fuzzy_position_score(
+            "laptop", "Laptop case", None, "us"
+        )
+        japanese_match = self.strategy.lexical_fuzzy_position_score(
+            "laptops", "Laptop case", None, "jp"
+        )
+
+        self.assertEqual(title_match, 0.75)
+        self.assertEqual(brand_match, 0.25)
+        self.assertEqual(exact_match, 0.0)
+        self.assertEqual(japanese_match, 0.0)
+        self.assertFalse(TPufStrategy._within_one_edit("laptops", "latpop"))
+
     def test_folded_passage_channel_is_opt_in(self) -> None:
         baseline = str(self.strategy.rank_by("blue shoe", "us"))
         passage_fold = str(
@@ -300,6 +320,30 @@ class TPufStrategyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.strategy.rerank_lexically("blue shoe", [], max_boost=1.01)
 
+    def test_fuzzy_position_boost_can_promote_one_edit_title_match(self) -> None:
+        rows = [
+            cast(Row, {"id": "first"}),
+            cast(Row, {"id": "fuzzy", "title": "Laptop case"}),
+            *[
+                cast(Row, {"id": f"other-{index}"})
+                for index in range(48)
+            ],
+        ]
+
+        ranked = self.strategy.rerank_lexically(
+            "laptops",
+            rows,
+            max_boost=0.0,
+            fuzzy_position_boost=0.15,
+            locale="us",
+        )
+
+        self.assertEqual(ranked[0]["id"], "fuzzy")
+        with self.assertRaises(ValueError):
+            self.strategy.rerank_lexically(
+                "laptops", rows, fuzzy_position_boost=1.01
+            )
+
     def test_candidate_union_is_capped_then_position_reranked(self) -> None:
         class FakeRow(dict[str, object]):
             @property
@@ -371,6 +415,61 @@ class TPufStrategyTests(unittest.TestCase):
         self.assertEqual(len(namespace.queries), 4)
         self.assertEqual({query["top_k"] for query in namespace.queries}, {50})
         self.assertEqual([row.id for row in results[0][1]], ["exact"])
+
+    def test_searcher_applies_fuzzy_position_boost_by_locale(self) -> None:
+        class FakeRow(dict[str, object]):
+            @property
+            def id(self) -> str:
+                return str(self["id"])
+
+            def model_dump(self) -> dict[str, object]:
+                return dict(self)
+
+        baseline_rows = [
+            cast(Row, FakeRow(id="first", **{"$dist": 1.0})),
+            cast(
+                Row,
+                FakeRow(
+                    id="fuzzy",
+                    **{"$dist": 0.9},
+                    title="Laptop case",
+                ),
+            ),
+            *[
+                cast(Row, FakeRow(id=f"other-{index}", **{"$dist": 0.5}))
+                for index in range(48)
+            ],
+        ]
+
+        class FakeNamespace:
+            def multi_query(self, *, queries):
+                del queries
+                return SimpleNamespace(
+                    results=[
+                        SimpleNamespace(rows=baseline_rows),
+                        SimpleNamespace(rows=[]),
+                        SimpleNamespace(rows=[]),
+                        SimpleNamespace(rows=[]),
+                    ]
+                )
+
+        namespace = FakeNamespace()
+        searcher = Searcher(
+            namespace,
+            self.strategy,
+            lexical_candidate_fusion=True,
+            lexical_fuzzy_position_boost=0.15,
+        )
+
+        us_results = list(
+            searcher.search([SearchRequest("q1", "laptops", "us")], top_k=1)
+        )
+        jp_results = list(
+            searcher.search([SearchRequest("q2", "laptops", "jp")], top_k=1)
+        )
+
+        self.assertEqual(us_results[0][1][0].id, "fuzzy")
+        self.assertEqual(jp_results[0][1][0].id, "first")
 
 
 if __name__ == "__main__":

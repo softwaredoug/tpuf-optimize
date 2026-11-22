@@ -44,11 +44,16 @@ class Searcher:
         lexical_rerank_boost: float = TPufStrategy.LEXICAL_RERANK_MAX_BOOST,
         lexical_cross_field_boost: float = 0.0,
         lexical_position_aggregation: str = "weighted_mean",
+        lexical_fuzzy_position_boost: float = 0.0,
     ) -> None:
         if batch_size < 1:
             raise ValueError("batch_size must be greater than zero")
         if not 0.0 <= lexical_cross_field_boost <= 1.0:
             raise ValueError("lexical_cross_field_boost must be between 0 and 1")
+        if not 0.0 <= lexical_fuzzy_position_boost <= 1.0:
+            raise ValueError(
+                "lexical_fuzzy_position_boost must be between 0 and 1"
+            )
         if lexical_position_aggregation not in TPufStrategy.LEXICAL_POSITION_AGGREGATIONS:
             raise ValueError(
                 "lexical_position_aggregation must be one of "
@@ -67,6 +72,7 @@ class Searcher:
         self.lexical_rerank_boost = lexical_rerank_boost
         self.lexical_cross_field_boost = lexical_cross_field_boost
         self.lexical_position_aggregation = lexical_position_aggregation
+        self.lexical_fuzzy_position_boost = lexical_fuzzy_position_boost
 
     def search(
         self, requests: Iterable[SearchRequest], top_k: int
@@ -82,6 +88,7 @@ class Searcher:
                 self.lexical_candidate_fusion
                 or self.lexical_rerank
                 or self.lexical_cross_field_boost
+                or self.lexical_fuzzy_position_boost
             ) else top_k
             if self.lexical_candidate_fusion:
                 queries = [
@@ -120,7 +127,11 @@ class Searcher:
                     fused_rows = self._reciprocal_rank_fusion(arm_rows)
                     self.lexical_stats["union_candidates"] += len(fused_rows)
                     rows = fused_rows[:candidate_depth]
-                    if self.lexical_rerank or self.lexical_cross_field_boost:
+                    if (
+                        self.lexical_rerank
+                        or self.lexical_cross_field_boost
+                        or self.lexical_fuzzy_position_boost
+                    ):
                         rows = self.strategy.rerank_lexically(
                             request.text,
                             rows,
@@ -128,12 +139,18 @@ class Searcher:
                             if self.lexical_rerank else 0.0,
                             self.lexical_cross_field_boost,
                             self.lexical_position_aggregation,
+                            self.lexical_fuzzy_position_boost,
+                            request.locale,
                         )
                     yield request, rows[:top_k]
             else:
                 for request, result in zip(request_batch, response.results):
                     rows = result.rows or []
-                    if self.lexical_rerank or self.lexical_cross_field_boost:
+                    if (
+                        self.lexical_rerank
+                        or self.lexical_cross_field_boost
+                        or self.lexical_fuzzy_position_boost
+                    ):
                         rows = self.strategy.rerank_lexically(
                             request.text,
                             rows,
@@ -141,6 +158,8 @@ class Searcher:
                             if self.lexical_rerank else 0.0,
                             self.lexical_cross_field_boost,
                             self.lexical_position_aggregation,
+                            self.lexical_fuzzy_position_boost,
+                            request.locale,
                         )
                     yield request, rows[:top_k]
 
