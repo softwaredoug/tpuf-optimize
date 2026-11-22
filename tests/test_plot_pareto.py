@@ -14,6 +14,18 @@ class ParetoPlotTests(unittest.TestCase):
         points = [fast, relevant, tie, Point("Slower", 21, 0.42), Point("Lower", 20, 0.40)]
         self.assertEqual(pareto_frontier(points), [fast, relevant, tie])
 
+    def test_frontier_is_computed_separately_for_each_cohort(self) -> None:
+        old = Point("Old", 100, 0.40, "historical")
+        fresh = Point("Fresh", 80, 0.39, "fresh")
+        points = [
+            old,
+            fresh,
+            Point("Fresh dominated", 90, 0.38, "fresh"),
+            Point("Old dominated", 110, 0.39, "historical"),
+        ]
+
+        self.assertEqual(pareto_frontier(points), [fresh, old])
+
     def test_readme_parsing_and_xml_escaping(self) -> None:
         points, pending = parse_leaderboard(
             "## ESCI 5,000-query leaderboard\n\n"
@@ -26,6 +38,22 @@ class ParetoPlotTests(unittest.TestCase):
         self.assertEqual(pending, 1)
         chart = render_svg(points, pending)
         self.assertIn("Title &amp; brand", chart)
+        ElementTree.fromstring(chart)
+
+    def test_readme_parsing_preserves_benchmark_cohort(self) -> None:
+        points, pending = parse_leaderboard(
+            "## ESCI 5,000-query leaderboard\n\n"
+            "| Variant | Cohort | p50 (ms) | NDCG@10 (full) |\n"
+            "|---|---|---:|---:|\n"
+            "| RMS stack | Fresh lexical split | 90 | 0.39 |\n"
+        )
+
+        self.assertEqual(
+            points, [Point("RMS stack", 90.0, 0.39, "Fresh lexical split")]
+        )
+        self.assertEqual(pending, 0)
+        chart = render_svg(points, pending)
+        self.assertIn("Fresh lexical split", chart)
         ElementTree.fromstring(chart)
 
     def test_pending_chart_has_no_points(self) -> None:

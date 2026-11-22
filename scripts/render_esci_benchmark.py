@@ -17,26 +17,45 @@ CATEGORY_LABELS = {
     "Third-party reranker": "Third-party reranker",
     "Embedding": "Embedding",
 }
+FRESH_LEXICAL_SLUGS = {"fuzzy", "rms-stack", "rms-stack-fuzzy015"}
 
 
-def render_block(aggregate, assets):
+def render_block(aggregate, assets, fresh_lexical=None):
     scores = aggregate.get("variants", {})
+    fresh_scores = (fresh_lexical or {}).get("variants", {})
     costs = aggregate.get("cost_estimates", {}).get(
         "variant_cost_per_run_usd", {}
     )
     query_count = aggregate.get("query_count", 5000)
-    unknown = scores.keys() - {v.slug for v in VARIANTS}
+    known_slugs = {variant.slug for variant in VARIANTS}
+    unknown = (scores.keys() | fresh_scores.keys()) - known_slugs
     if unknown:
         raise ValueError("Unexpected variant in benchmark aggregate")
+    if fresh_scores.keys() - FRESH_LEXICAL_SLUGS:
+        raise ValueError("Fresh lexical aggregate contains an unexpected variant")
     count = aggregate.get("query_count")
     disjoint = aggregate.get("disjoint_count")
+    fresh_count = (fresh_lexical or {}).get("query_count")
+    fresh_disjoint = (fresh_lexical or {}).get("disjoint_count")
     lines = [START, ""]
     if count is not None:
         lines += [
-            f"Scored variants used the same {count:,} Referee queries. "
+            f"Historical leaderboard variants used the same {count:,} Referee queries. "
             f"The second NDCG column covers the {disjoint:,} queries not found in "
             f"{aggregate['checked_artifacts']} available historical task artifacts.",
             "",
+        ]
+    if fresh_count is not None:
+        lines += [
+            f"Fresh lexical rows use a separate {fresh_count:,}-query Referee session. "
+            f"Their disjoint column covers {fresh_disjoint:,} queries after "
+            f"excluding {fresh_count - fresh_disjoint} overlaps with "
+            f"{fresh_lexical['checked_artifacts']} historical task artifacts. "
+            "Compare values within a cohort, not across cohorts.",
+            "",
+        ]
+    if count is not None:
+        lines += [
             "Classes: lexical; hybrid (lexical + embedding, including "
             "rule-based reranking on both); LTR (Learning to Rank), a classic "
             "ML reranker using query-dependent, query, and document features; "
@@ -44,12 +63,12 @@ def render_block(aggregate, assets):
             "",
         ]
     lines += [
-        "| Variant | Class | NDCG@10 (full) | NDCG@10 (disjoint) | p50 (ms) | p95 (ms) | "
-        f"Cost* (USD/{query_count:,} queries) | Commit |",
-        "|---|---|---:|---:|---:|---:|---:|---|",
+        "| Variant | Cohort | Class | NDCG@10 (full) | NDCG@10 (disjoint) | "
+        f"p50 (ms) | p95 (ms) | Cost* (USD/{query_count:,} queries) | Commit |",
+        "|---|---|---|---:|---:|---:|---:|---:|---|",
     ]
     ordered = sorted(
-        VARIANTS,
+        (variant for variant in VARIANTS if variant.slug in scores),
         key=lambda v: scores.get(v.slug, {}).get("ndcg_at_10", -1),
         reverse=True,
     )
@@ -70,8 +89,32 @@ def render_block(aggregate, assets):
         branch_url = f"https://github.com/softwaredoug/tpuf-optimize/tree/{variant.branch}"
         lines.append(
             f"| [{variant.name}]({branch_url}) | "
+            "Historical leaderboard | "
             f"{CATEGORY_LABELS.get(variant.category, variant.category)} | "
             f"{' | '.join(values)} | {cost_cell} | "
+            f"[`{variant.revision}`]({commit_url}) |"
+        )
+    fresh_ordered = sorted(
+        (variant for variant in VARIANTS if variant.slug in fresh_scores),
+        key=lambda variant: fresh_scores[variant.slug]["ndcg_at_10"],
+        reverse=True,
+    )
+    for variant in fresh_ordered:
+        result = fresh_scores[variant.slug]
+        if not result["commit"].startswith(variant.revision):
+            raise ValueError("Fresh lexical aggregate revision does not match")
+        values = (
+            f"{result['ndcg_at_10']:.5f}",
+            f"{result['disjoint_ndcg_at_10']:.5f}",
+            f"{result['p50_ms']:.2f}",
+            f"{result['p95_ms']:.2f}",
+        )
+        branch_url = f"https://github.com/softwaredoug/tpuf-optimize/tree/{variant.branch}"
+        commit_url = f"https://github.com/softwaredoug/tpuf-optimize/commit/{variant.revision}"
+        lines.append(
+            f"| [{variant.name}]({branch_url}) | Fresh lexical | "
+            f"{CATEGORY_LABELS.get(variant.category, variant.category)} | "
+            f"{' | '.join(values)} | $0.000000* | "
             f"[`{variant.revision}`]({commit_url}) |"
         )
     if costs:
@@ -109,14 +152,31 @@ def render_block(aggregate, assets):
             "- **Third-party reranker** — hosted reranking model such as Voyage rerank-3.",
             "- **Embedding** — pure embedding retrieval; listed separately from hybrid.",
         ])
+    pending = len(VARIANTS) - len(scores.keys() | fresh_scores.keys())
     for percentile in ("p50", "p95"):
         points = [
-            Point(v.name, scores[v.slug][f"{percentile}_ms"], scores[v.slug]["ndcg_at_10"])
-            for v in ordered if v.slug in scores
+            *[
+                Point(
+                    variant.name,
+                    scores[variant.slug][f"{percentile}_ms"],
+                    scores[variant.slug]["ndcg_at_10"],
+                    "Historical leaderboard",
+                )
+                for variant in ordered
+            ],
+            *[
+                Point(
+                    variant.name,
+                    fresh_scores[variant.slug][f"{percentile}_ms"],
+                    fresh_scores[variant.slug]["ndcg_at_10"],
+                    "Fresh lexical",
+                )
+                for variant in fresh_ordered
+            ],
         ]
         filename = f"esci-pareto-{percentile}.svg"
         (assets / filename).write_text(
-            render_svg(points, len(VARIANTS) - len(points), percentile), encoding="utf-8",
+            render_svg(points, pending, percentile), encoding="utf-8",
         )
         lines.extend(["", f"![ESCI NDCG@10 versus {percentile} latency](assets/{filename})"])
     cost_points = [
@@ -124,16 +184,26 @@ def render_block(aggregate, assets):
             variant.name,
             float(costs[variant.slug]),
             float(scores[variant.slug]["ndcg_at_10"]),
+            "Historical leaderboard",
         )
         for variant in ordered
         if variant.slug in scores and variant.slug in costs
     ]
+    cost_points.extend(
+        Point(
+            variant.name,
+            0.0,
+            float(fresh_scores[variant.slug]["ndcg_at_10"]),
+            "Fresh lexical",
+        )
+        for variant in fresh_ordered
+    )
     cost_filename = "esci-pareto-cost.svg"
     query_count = aggregate.get("query_count", 5000)
     (assets / cost_filename).write_text(
         render_svg(
             cost_points,
-            len(VARIANTS) - len(cost_points),
+            pending,
             "cost",
             chart_title="ESCI relevance vs. model inference cost",
             x_axis_label=(
@@ -157,6 +227,11 @@ def render_block(aggregate, assets):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--aggregate", type=Path, default=ROOT / "assets/esci-benchmark.json")
+    parser.add_argument(
+        "--lexical-aggregate",
+        type=Path,
+        default=ROOT / "assets/esci-lexical-fresh-5k.json",
+    )
     parser.add_argument("--readme", type=Path, default=ROOT / "README.md")
     args = parser.parse_args()
     readme = args.readme.read_text(encoding="utf-8")
@@ -164,7 +239,13 @@ def main():
     aggregate = (
         json.loads(args.aggregate.read_text(encoding="utf-8")) if args.aggregate.exists() else {}
     )
-    replacement = render_block(aggregate, args.readme.parent / "assets")
+    fresh_lexical = (
+        json.loads(args.lexical_aggregate.read_text(encoding="utf-8"))
+        if args.lexical_aggregate.exists() else None
+    )
+    replacement = render_block(
+        aggregate, args.readme.parent / "assets", fresh_lexical
+    )
     args.readme.write_text(readme[:first] + replacement + readme[last:], encoding="utf-8")
 
 

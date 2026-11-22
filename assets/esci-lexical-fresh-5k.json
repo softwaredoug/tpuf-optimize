@@ -1,0 +1,31 @@
+{
+  "query_count": 5000,
+  "disjoint_count": 4819,
+  "checked_artifacts": 62,
+  "variants": {
+    "fuzzy": {
+      "commit": "c46c935951d02d670b9d619162b13048ce8a1c2b",
+      "ndcg_at_10": 0.3707652993411864,
+      "disjoint_ndcg_at_10": 0.37180530054834,
+      "p50_ms": 69.21691657043993,
+      "p95_ms": 114.8109589703381,
+      "retries_429": 0
+    },
+    "rms-stack": {
+      "commit": "038e845ea0ed52d38fc419f4dbdf4207782a4604",
+      "ndcg_at_10": 0.3879738199315028,
+      "disjoint_ndcg_at_10": 0.3892591369107131,
+      "p50_ms": 91.39539545867592,
+      "p95_ms": 150.97216702997684,
+      "retries_429": 0
+    },
+    "rms-stack-fuzzy015": {
+      "commit": "d663a92e86291ae2efbc08523bc7fe680c9affec",
+      "ndcg_at_10": 0.38834445346067376,
+      "disjoint_ndcg_at_10": 0.38955429160494875,
+      "p50_ms": 94.08560453448445,
+      "p95_ms": 162.60250005871058,
+      "retries_429": 0
+    }
+  }
+}

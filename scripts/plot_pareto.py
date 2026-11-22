@@ -10,8 +10,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SECTION = "## ESCI 5,000-query leaderboard"
 HEADERS = (
+    ("Variant", "Cohort", "p50 (ms)", "NDCG@10 (full)"),
+    ("Variant", "Cohort", "Latency p50 / p95 (ms)", "NDCG@10"),
     ("Variant", "p50 (ms)", "NDCG@10 (full)"),
     ("Variant", "Latency p50 / p95 (ms)", "NDCG@10"),
+)
+COHORT_COLORS = (
+    ("#43628b", "#087859"),
+    ("#a65d03", "#c2410c"),
+    ("#6842a6", "#5b2c83"),
+    ("#087e8b", "#07545b"),
 )
 
 
@@ -20,6 +28,7 @@ class Point:
     name: str
     latency: float
     ndcg: float
+    cohort: str = "default"
 
 
 def parse_leaderboard(markdown: str) -> tuple[list[Point], int]:
@@ -32,6 +41,7 @@ def parse_leaderboard(markdown: str) -> tuple[list[Point], int]:
     points = []
     pending = 0
     columns = None
+    cohort_column = None
     for line in lines[start:]:
         if line.startswith("## "):
             break
@@ -43,7 +53,12 @@ def parse_leaderboard(markdown: str) -> tuple[list[Point], int]:
         if columns is None:
             for header in HEADERS:
                 if all(name in cells for name in header):
-                    columns = [cells.index(name) for name in header]
+                    columns = [
+                        cells.index(name) for name in header
+                        if name != "Cohort"
+                    ]
+                    if "Cohort" in cells:
+                        cohort_column = cells.index("Cohort")
                     break
             continue
         if all(set(cell) <= {"-", ":"} for cell in cells):
@@ -51,6 +66,7 @@ def parse_leaderboard(markdown: str) -> tuple[list[Point], int]:
         if len(cells) <= max(columns):
             raise ValueError(f"Malformed leaderboard row: {line}")
         name, latency, ndcg = (cells[index] for index in columns)
+        cohort = cells[cohort_column] if cohort_column is not None else "default"
         if name.startswith("[") and "](" in name:
             name = name[1:name.index("](")]
         if any(value.casefold() in {"pending", "", "—"} for value in (latency, ndcg)):
@@ -60,7 +76,7 @@ def parse_leaderboard(markdown: str) -> tuple[list[Point], int]:
         quality = float(ndcg)
         if not math.isfinite(p50) or p50 < 0 or not 0 <= quality <= 1:
             raise ValueError(f"Invalid latency or NDCG for {name}")
-        points.append(Point(name, p50, quality))
+        points.append(Point(name, p50, quality, cohort))
     if columns is None or not (points or pending):
         raise ValueError("ESCI leaderboard has no readable rows")
     return points, pending
@@ -72,7 +88,8 @@ def pareto_frontier(points: list[Point]) -> list[Point]:
         [
             a for a in points
             if not any(
-                b.latency <= a.latency and b.ndcg >= a.ndcg
+                b.cohort == a.cohort
+                and b.latency <= a.latency and b.ndcg >= a.ndcg
                 and (b.latency < a.latency or b.ndcg > a.ndcg)
                 for b in points
             )
@@ -145,27 +162,57 @@ def render_svg(
             f'<text class="small" x="{left - 10}" y="{py + 4:.1f}" '
             f'text-anchor="end">{ndcg:.4f}</text>',
         ])
+    cohorts = sorted({point.cohort for point in points})
+    styles = {
+        cohort: COHORT_COLORS[index % len(COHORT_COLORS)]
+        for index, cohort in enumerate(cohorts)
+    }
+    if len(cohorts) == 1:
+        description = "Variants; green marks the Pareto frontier."
+    else:
+        description = (
+            "Cohorts use separate Pareto frontiers; do not compare their "
+            "scores as paired measurements."
+        )
     svg.extend([
         f'<path class="axis" fill="none" d="M{left} {top}V{bottom}H{right}"/>',
         f'<text x="{(left + right) / 2}" y="{height - 19}" '
         f'text-anchor="middle">{escape(axis_label)}</text>',
         f'<text transform="translate(24 {(top + bottom) / 2}) rotate(-90)" '
         'text-anchor="middle">NDCG@10</text>',
-        '<text x="657" y="100">Variants · green = Pareto frontier</text>',
+        f'<text x="657" y="100">{escape(description)}</text>',
     ])
     frontier = pareto_frontier(points)
-    line = " ".join(f"{x(p.latency):.1f},{y(p.ndcg):.1f}" for p in frontier)
-    svg.append(f'<polyline points="{line}" fill="none" stroke="#087859" stroke-width="2"/>')
+    for cohort in cohorts:
+        cohort_frontier = [point for point in frontier if point.cohort == cohort]
+        line = " ".join(
+            f"{x(point.latency):.1f},{y(point.ndcg):.1f}"
+            for point in cohort_frontier
+        )
+        if line:
+            svg.append(
+                f'<polyline points="{line}" fill="none" '
+                f'stroke="{styles[cohort][1]}" stroke-width="2"/>'
+            )
     labels: dict[tuple[float, float], list[int]] = {}
     for number, point in enumerate(points, 1):
         px, py = x(point.latency), y(point.ndcg)
-        color = "#087859" if point in frontier else "#43628b"
+        point_color, frontier_color = styles[point.cohort]
+        stroke = frontier_color if point in frontier else point_color
         name = escape(point.name)
+        legend_name = (
+            f"{name} ({escape(point.cohort)})"
+            if len(cohorts) > 1 else name
+        )
         svg.extend([
-            f'<circle cx="{px:.1f}" cy="{py:.1f}" r="5" fill="{color}">'
-            f'<title>{name}: {point.latency:g} ms, {point.ndcg:g} NDCG</title></circle>',
-            f'<circle cx="664" cy="{100 + 25 * number - 4}" r="4" fill="{color}"/>',
-            f'<text x="677" y="{100 + 25 * number}">{number}. {name}</text>',
+            f'<circle cx="{px:.1f}" cy="{py:.1f}" r="5" fill="{point_color}" '
+            f'stroke="{stroke}" stroke-width="2">'
+            f'<title>{name} ({escape(point.cohort)}): '
+            f'{point.latency:g} ms, {point.ndcg:g} NDCG</title></circle>',
+            f'<circle cx="664" cy="{100 + 25 * number - 4}" r="4" '
+            f'fill="{point_color}" stroke="{stroke}" stroke-width="2"/>',
+            f'<text x="677" y="{100 + 25 * number}">'
+            f'{number}. {legend_name}</text>',
         ])
         labels.setdefault((px, py), []).append(number)
     for (px, py), numbers in labels.items():

@@ -3,110 +3,14 @@
 Utilities for indexing datasets into Turbopuffer and experimenting with search
 parameters.
 
-## Current lexical leader recipe (opt-in)
+## Optimization workflow
 
-The strongest current lexical recipe is on
-[`experiment/lexical-union-position`](https://github.com/softwaredoug/tpuf-optimize/tree/experiment/lexical-union-position)
-at [`d663a92`](https://github.com/softwaredoug/tpuf-optimize/commit/d663a92).
-It uses only existing indexed text: locale-aware passage/title BM25, folded
-passage and whitespace-brand BM25, selective AND/phrase candidate retrieval,
-RRF, and a bounded text-only reranker. No embeddings or learned reranker are
-used. The one-edit fuzzy-position boost is opt-in because its incremental gain
-over the RMS stack is uncertain.
-
-For a query `q` and locale analyzer suffix `L`, the broad Turbopuffer query has
-this shape:
-
-```python
-base = {
-    "rank_by": ("Sum", (
-        (f"passage__{L}", "BM25", q),
-        ("Product", 2.0, (f"title__{L}", "BM25", q)),
-        ("Product", 0.5, ("passage__word_v4__fold", "BM25", q)),
-        ("Product", 0.5, ("brand__whitespace__default", "BM25", q)),
-        # For each non-Japanese query token >= 6 characters:
-        ("Product", 0.35, (
-            "title__word_v4__fuzzy", "Fuzzy", token,
-            {"max_edit_distance": [{"min_query_chars": 6, "distance": 1}],
-             "case_sensitive": False},
-        )),
-        ("Product", 0.15, (
-            "brand__word_v4__fuzzy", "Fuzzy", token,
-            {"max_edit_distance": [{"min_query_chars": 6, "distance": 1}],
-             "case_sensitive": False},
-        )),
-    )),
-    "filters": ("locale", "Eq", locale),
-    "top_k": 50,
-    "include_attributes": ["title", "description", "brand", "locale"],
-}
-```
-
-The three selective arms use the same DSL shape, changing the field and filter
-operator:
-
-```python
-title_all = {
-    "rank_by": (f"title__{L}", "BM25", q),
-    "filters": ("And", (
-        ("locale", "Eq", locale),
-        (f"title__{L}", "ContainsAllTokens", q),
-    )),
-    "top_k": 50,
-}
-passage_phrase = {
-    "rank_by": (f"passage__{L}", "BM25", q),
-    "filters": ("And", (
-        ("locale", "Eq", locale),
-        (f"passage__{L}", "ContainsTokenSequence", q),
-    )),
-    "top_k": 50,
-}
-brand_phrase = {
-    "rank_by": ("brand__word_v4__default", "BM25", q),
-    "filters": ("And", (
-        ("locale", "Eq", locale),
-        ("brand__word_v4__default", "ContainsTokenSequence", q),
-    )),
-    "top_k": 50,
-}
-```
-
-These three lists plus the broad query are merged with reciprocal-rank fusion,
-`score[doc] += 1 / (20 + rank)`, then capped at 50.
-
-At query time, the returned text is used to reorder that union:
-
-```text
-adjusted =
-    1 - fused_rank / max(candidate_count - 1, 1)
-    + 0.18 * RMS(title/description/brand position quality)
-    + 0.03 * cross-field term coverage
-    + optional 0.15 * one-edit title/brand match coverage
-```
-
-Position quality rewards query-term coverage, order, compactness, early
-occurrence, and exact phrase matches. The optional fuzzy term applies only to
-query tokens at least six characters long and is disabled for Japanese. Reproduce
-the opt-in recipe with:
-
-```sh
-uv run query --queries queries.csv --output results.csv \
-  --lexical-candidate-fusion --lexical-rerank \
-  --lexical-cross-field-boost 0.03 \
-  --lexical-position-aggregation rms \
-  --lexical-fuzzy-position-boost 0.15 \
-  --field-fusion passage_fold_brand_whitespace
-```
-
-On the fresh timed 5,000-query benchmark, this recipe scored `0.388344` full /
-`0.389554` artifact-disjoint at p50/p95 latency of `94.09/162.60 ms`. The RMS
-stack without the fuzzy-position bonus scored `0.387974/0.389259` at
-`91.40/150.97 ms`; c46 scored `0.370765/0.371805` at `69.22/114.81 ms`. The
-fuzzy-position increment over RMS was `+0.000371` paired (95% CI
-`[-0.000150, +0.000906]`), so keep that bonus opt-in. None of these full-split
-scores reached `0.39`. An earlier NDCG-only split scored `0.390103` for the
-fuzzy-position variant; it is preliminary and not the timed benchmark result.
+This repository is a harness for controlled retrieval experiments. The `main`
+branch keeps the simple title/description BM25 baseline; experiment branches
+contain alternate query strategies and their evaluation notes. Keep training
+and holdout data separate, and use a fresh matched Referee session for final
+benchmarks. The shared `Indexer`, `Searcher`, and batch runners provide the
+common data and I/O layer.
 
 ## Setup
 
@@ -167,32 +71,9 @@ so relevance experiments can focus on the strategy without changing the runners.
 
 ## ESCI 5,000-query leaderboard
 
-### Fresh matched lexical comparison (separate cohort)
-
-This fresh 5,000-query Referee session measured NDCG and latency for the lexical
-leader, the RMS stack, and its opt-in fuzzy-position variant. These results use
-a different query cohort from the historical leaderboard table below.
-
-| Variant | NDCG@10 (full) | NDCG@10 (disjoint) | p50 (ms) | p95 (ms) | 429 retries |
-|---|---:|---:|---:|---:|---:|
-| c46 passage BM25 + fuzzy title/brand (`c46c935`) | 0.370765 | 0.371805 | 69.22 | 114.81 | 0 |
-| RMS lexical stack (`038e845`) | 0.387974 | 0.389259 | 91.40 | 150.97 | 0 |
-| RMS stack + fuzzy-position boost 0.15 (`d663a92`, opt-in) | 0.388344 | 0.389554 | 94.09 | 162.60 | 0 |
-
-The fuzzy-position variant improved over c46 by `+0.017579` paired (95% CI
-`[+0.015031, +0.020238]`). Its incremental gain over the RMS stack was
-`+0.000371` (95% CI `[-0.000150, +0.000906]`), so the boost remains opt-in.
-None of these full-split scores reached `0.39`; the disjoint fuzzy-position
-score was `0.389554`.
-
-![Fresh lexical benchmark NDCG@10 versus p50 latency](assets/esci-lexical-fresh-p50.svg)
-
-![Fresh lexical benchmark NDCG@10 versus p95 latency](assets/esci-lexical-fresh-p95.svg)
-
-Recreate these separate charts from the aggregate-only JSON with
-`uv run python scripts/render_lexical_benchmark.py --aggregate "$RUN/aggregate.json"`.
-
-### Existing full leaderboard cohort
+The generated table below includes both the existing leaderboard cohort and
+the fresh lexical comparison. Cohort labels keep different query splits
+distinct; Pareto frontiers are computed separately within each cohort.
 
 To measure a single checkout without a client-side result or feature cache,
 use an explicit `query_id,query,locale` CSV and keep the inputs and outputs
@@ -222,24 +103,29 @@ Turbopuffer database charges are excluded.
 
 <!-- esci-benchmark:start -->
 
-Scored variants used the same 5,000 Referee queries. The second NDCG column covers the 4,861 queries not found in 51 available historical task artifacts.
+Historical leaderboard variants used the same 5,000 Referee queries. The second NDCG column covers the 4,861 queries not found in 51 available historical task artifacts.
+
+Fresh lexical rows use a separate 5,000-query Referee session. Their disjoint column covers 4,819 queries after excluding 181 overlaps with 62 historical task artifacts. Compare values within a cohort, not across cohorts.
 
 Classes: lexical; hybrid (lexical + embedding, including rule-based reranking on both); LTR (Learning to Rank), a classic ML reranker using query-dependent, query, and document features; third-party reranker. Pure embedding retrieval is listed separately.
-| Variant | Class | NDCG@10 (full) | NDCG@10 (disjoint) | p50 (ms) | p95 (ms) | Cost* (USD/5,000 queries) | Commit |
-|---|---|---:|---:|---:|---:|---:|---|
-| [Voyage rerank-3 over ANN + BM25](https://github.com/softwaredoug/tpuf-optimize/tree/experiment/tpuf-native-rerankers) | Third-party reranker | 0.45677 | 0.45620 | 240.07 | 381.75 | $6.346637* | [`0a5816e`](https://github.com/softwaredoug/tpuf-optimize/commit/0a5816e) |
-| [Typed + computed reranker](https://github.com/softwaredoug/tpuf-optimize/tree/innovate-typed-computed-ltr) | LTR | 0.41825 | 0.41771 | 180.22 | 215.46 | $0.001637* | [`6508e87`](https://github.com/softwaredoug/tpuf-optimize/commit/6508e87) |
-| [Computed-feature reranker](https://github.com/softwaredoug/tpuf-optimize/tree/innovate-computed-ltr-features) | LTR | 0.41405 | 0.41329 | 179.54 | 252.30 | $0.001637* | [`e64100d`](https://github.com/softwaredoug/tpuf-optimize/commit/e64100d) |
-| [Learned pairwise reranker](https://github.com/softwaredoug/tpuf-optimize/tree/research/learned-rank) | LTR | 0.40582 | 0.40517 | 110.94 | 206.48 | $0.001637* | [`adf9768`](https://github.com/softwaredoug/tpuf-optimize/commit/adf9768) |
-| [Identifier-gated RRF](https://github.com/softwaredoug/tpuf-optimize/tree/confidence-aware-fusion) | Hybrid | 0.40152 | 0.40100 | 104.75 | 171.69 | $0.001637* | [`7e22661`](https://github.com/softwaredoug/tpuf-optimize/commit/7e22661) |
-| [Deterministic product reranker](https://github.com/softwaredoug/tpuf-optimize/tree/research-product-rerank) | Hybrid | 0.39209 | 0.39147 | 130.64 | 184.08 | $0.001637* | [`7ffd772`](https://github.com/softwaredoug/tpuf-optimize/commit/7ffd772) |
-| [Min-max score fusion](https://github.com/softwaredoug/tpuf-optimize/tree/research-score-fusion) | Hybrid | 0.39180 | 0.39126 | 107.18 | 142.44 | $0.001637* | [`41e64d4`](https://github.com/softwaredoug/tpuf-optimize/commit/41e64d4) |
-| [2:1 Voyage-4 + BM25 RRF](https://github.com/softwaredoug/tpuf-optimize/tree/experiment-6-hybrid-rrf) | Hybrid | 0.38454 | 0.38382 | 134.50 | 207.70 | $0.001637* | [`cc5fc8a`](https://github.com/softwaredoug/tpuf-optimize/commit/cc5fc8a) |
-| [Passage BM25 + fuzzy title/brand](https://github.com/softwaredoug/tpuf-optimize/tree/exp3-bm25-passage-fuzzy) | Lexical | 0.37588 | 0.37519 | 67.03 | 106.56 | $0.000000* | [`c46c935`](https://github.com/softwaredoug/tpuf-optimize/commit/c46c935) |
-| [Title + locale-aware passage BM25](https://github.com/softwaredoug/tpuf-optimize/tree/relevance/field-weights-passage) | Lexical | 0.37469 | 0.37398 | 60.28 | 79.78 | $0.000000* | [`cdb2d64`](https://github.com/softwaredoug/tpuf-optimize/commit/cdb2d64) |
-| [Four-channel RRF](https://github.com/softwaredoug/tpuf-optimize/tree/exp7-rank-fusion) | Hybrid | 0.37407 | 0.37316 | 125.09 | 203.82 | $0.001637* | [`3f4c9bc`](https://github.com/softwaredoug/tpuf-optimize/commit/3f4c9bc) |
-| [Baseline: Voyage-4 ANN (Turbopuffer)](https://github.com/softwaredoug/tpuf-optimize/tree/experiment-6-hybrid-rrf) | Embedding | 0.36286 | 0.36236 | 97.85 | 124.41 | $0.001637* | [`cc5fc8a`](https://github.com/softwaredoug/tpuf-optimize/commit/cc5fc8a) |
-| [Baseline: weighted title/description BM25](https://github.com/softwaredoug/tpuf-optimize/tree/main) | Lexical | 0.31331 | 0.31266 | 59.76 | 72.38 | $0.000000* | [`1768df7`](https://github.com/softwaredoug/tpuf-optimize/commit/1768df7) |
+| Variant | Cohort | Class | NDCG@10 (full) | NDCG@10 (disjoint) | p50 (ms) | p95 (ms) | Cost* (USD/5,000 queries) | Commit |
+|---|---|---|---:|---:|---:|---:|---:|---|
+| [Voyage rerank-3 over ANN + BM25](https://github.com/softwaredoug/tpuf-optimize/tree/experiment/tpuf-native-rerankers) | Historical leaderboard | Third-party reranker | 0.45677 | 0.45620 | 240.07 | 381.75 | $6.346637* | [`0a5816e`](https://github.com/softwaredoug/tpuf-optimize/commit/0a5816e) |
+| [Typed + computed reranker](https://github.com/softwaredoug/tpuf-optimize/tree/innovate-typed-computed-ltr) | Historical leaderboard | LTR | 0.41825 | 0.41771 | 180.22 | 215.46 | $0.001637* | [`6508e87`](https://github.com/softwaredoug/tpuf-optimize/commit/6508e87) |
+| [Computed-feature reranker](https://github.com/softwaredoug/tpuf-optimize/tree/innovate-computed-ltr-features) | Historical leaderboard | LTR | 0.41405 | 0.41329 | 179.54 | 252.30 | $0.001637* | [`e64100d`](https://github.com/softwaredoug/tpuf-optimize/commit/e64100d) |
+| [Learned pairwise reranker](https://github.com/softwaredoug/tpuf-optimize/tree/research/learned-rank) | Historical leaderboard | LTR | 0.40582 | 0.40517 | 110.94 | 206.48 | $0.001637* | [`adf9768`](https://github.com/softwaredoug/tpuf-optimize/commit/adf9768) |
+| [Identifier-gated RRF](https://github.com/softwaredoug/tpuf-optimize/tree/confidence-aware-fusion) | Historical leaderboard | Hybrid | 0.40152 | 0.40100 | 104.75 | 171.69 | $0.001637* | [`7e22661`](https://github.com/softwaredoug/tpuf-optimize/commit/7e22661) |
+| [Deterministic product reranker](https://github.com/softwaredoug/tpuf-optimize/tree/research-product-rerank) | Historical leaderboard | Hybrid | 0.39209 | 0.39147 | 130.64 | 184.08 | $0.001637* | [`7ffd772`](https://github.com/softwaredoug/tpuf-optimize/commit/7ffd772) |
+| [Min-max score fusion](https://github.com/softwaredoug/tpuf-optimize/tree/research-score-fusion) | Historical leaderboard | Hybrid | 0.39180 | 0.39126 | 107.18 | 142.44 | $0.001637* | [`41e64d4`](https://github.com/softwaredoug/tpuf-optimize/commit/41e64d4) |
+| [2:1 Voyage-4 + BM25 RRF](https://github.com/softwaredoug/tpuf-optimize/tree/experiment-6-hybrid-rrf) | Historical leaderboard | Hybrid | 0.38454 | 0.38382 | 134.50 | 207.70 | $0.001637* | [`cc5fc8a`](https://github.com/softwaredoug/tpuf-optimize/commit/cc5fc8a) |
+| [Passage BM25 + fuzzy title/brand](https://github.com/softwaredoug/tpuf-optimize/tree/exp3-bm25-passage-fuzzy) | Historical leaderboard | Lexical | 0.37588 | 0.37519 | 67.03 | 106.56 | $0.000000* | [`c46c935`](https://github.com/softwaredoug/tpuf-optimize/commit/c46c935) |
+| [Title + locale-aware passage BM25](https://github.com/softwaredoug/tpuf-optimize/tree/relevance/field-weights-passage) | Historical leaderboard | Lexical | 0.37469 | 0.37398 | 60.28 | 79.78 | $0.000000* | [`cdb2d64`](https://github.com/softwaredoug/tpuf-optimize/commit/cdb2d64) |
+| [Four-channel RRF](https://github.com/softwaredoug/tpuf-optimize/tree/exp7-rank-fusion) | Historical leaderboard | Hybrid | 0.37407 | 0.37316 | 125.09 | 203.82 | $0.001637* | [`3f4c9bc`](https://github.com/softwaredoug/tpuf-optimize/commit/3f4c9bc) |
+| [Baseline: Voyage-4 ANN (Turbopuffer)](https://github.com/softwaredoug/tpuf-optimize/tree/experiment-6-hybrid-rrf) | Historical leaderboard | Embedding | 0.36286 | 0.36236 | 97.85 | 124.41 | $0.001637* | [`cc5fc8a`](https://github.com/softwaredoug/tpuf-optimize/commit/cc5fc8a) |
+| [Baseline: weighted title/description BM25](https://github.com/softwaredoug/tpuf-optimize/tree/main) | Historical leaderboard | Lexical | 0.31331 | 0.31266 | 59.76 | 72.38 | $0.000000* | [`1768df7`](https://github.com/softwaredoug/tpuf-optimize/commit/1768df7) |
+| [RMS stack + fuzzy-position boost 0.15](https://github.com/softwaredoug/tpuf-optimize/tree/experiment/lexical-union-position) | Fresh lexical | Lexical | 0.38834 | 0.38955 | 94.09 | 162.60 | $0.000000* | [`d663a92`](https://github.com/softwaredoug/tpuf-optimize/commit/d663a92) |
+| [RMS lexical candidate stack](https://github.com/softwaredoug/tpuf-optimize/tree/experiment/lexical-union-position) | Fresh lexical | Lexical | 0.38797 | 0.38926 | 91.40 | 150.97 | $0.000000* | [`038e845`](https://github.com/softwaredoug/tpuf-optimize/commit/038e845) |
+| [Passage BM25 + fuzzy title/brand](https://github.com/softwaredoug/tpuf-optimize/tree/exp3-bm25-passage-fuzzy) | Fresh lexical | Lexical | 0.37077 | 0.37181 | 69.22 | 114.81 | $0.000000* | [`c46c935`](https://github.com/softwaredoug/tpuf-optimize/commit/c46c935) |
 
 *Estimated external model inference per 5,000-query run. Voyage-4 query embedding uses a UTF-8-bytes/4 token proxy (0.06 USD/million tokens); lexical-only and local CPU rankers add no model inference charge. Excludes Turbopuffer database/query charges and index-time embedding. Voyage rerank-3 uses $0.05/M and a 25,380-token-per-query training proxy.
 

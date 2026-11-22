@@ -1,83 +1,96 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1060 460" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1060 535" role="img" aria-labelledby="title desc">
 <title id="title">ESCI relevance vs. latency</title>
 <desc id="desc">p95 latency in milliseconds versus NDCG at 10. Lower latency and higher NDCG are better.</desc>
 <style>text{font:14px system-ui,sans-serif;fill:#172438}.small{font-size:12px;fill:#43546b}.heading{font-size:23px;font-weight:bold}.axis{stroke:#73829a}.grid{stroke:#dfe6ee}</style>
 <rect width="100%" height="100%" rx="12" fill="#f6f8fb"/>
 <text x="32" y="40" class="heading">ESCI relevance vs. latency</text>
-<text x="32" y="64" class="small">13 measured; 0 pending. Faster and more relevant is upper left.</text>
-<path class="grid" d="M86.0 94V390 M86 390.0H615"/>
-<text class="small" x="86.0" y="410" text-anchor="middle">35.3</text>
-<text class="small" x="76" y="394.0" text-anchor="end">0.2961</text>
-<path class="grid" d="M191.8 94V390 M86 330.8H615"/>
-<text class="small" x="191.8" y="410" text-anchor="middle">112.0</text>
-<text class="small" x="76" y="334.8" text-anchor="end">0.3317</text>
-<path class="grid" d="M297.6 94V390 M86 271.6H615"/>
-<text class="small" x="297.6" y="410" text-anchor="middle">188.7</text>
-<text class="small" x="76" y="275.6" text-anchor="end">0.3672</text>
-<path class="grid" d="M403.4 94V390 M86 212.4H615"/>
-<text class="small" x="403.4" y="410" text-anchor="middle">265.4</text>
-<text class="small" x="76" y="216.4" text-anchor="end">0.4028</text>
-<path class="grid" d="M509.2 94V390 M86 153.2H615"/>
-<text class="small" x="509.2" y="410" text-anchor="middle">342.1</text>
-<text class="small" x="76" y="157.2" text-anchor="end">0.4384</text>
-<path class="grid" d="M615.0 94V390 M86 94.0H615"/>
-<text class="small" x="615.0" y="410" text-anchor="middle">418.9</text>
+<text x="32" y="64" class="small">16 measured; 0 pending. Faster and more relevant is upper left.</text>
+<path class="grid" d="M86.0 94V465 M86 465.0H615"/>
+<text class="small" x="86.0" y="485" text-anchor="middle">35.3</text>
+<text class="small" x="76" y="469.0" text-anchor="end">0.2961</text>
+<path class="grid" d="M191.8 94V465 M86 390.8H615"/>
+<text class="small" x="191.8" y="485" text-anchor="middle">112.0</text>
+<text class="small" x="76" y="394.8" text-anchor="end">0.3317</text>
+<path class="grid" d="M297.6 94V465 M86 316.6H615"/>
+<text class="small" x="297.6" y="485" text-anchor="middle">188.7</text>
+<text class="small" x="76" y="320.6" text-anchor="end">0.3672</text>
+<path class="grid" d="M403.4 94V465 M86 242.4H615"/>
+<text class="small" x="403.4" y="485" text-anchor="middle">265.4</text>
+<text class="small" x="76" y="246.4" text-anchor="end">0.4028</text>
+<path class="grid" d="M509.2 94V465 M86 168.2H615"/>
+<text class="small" x="509.2" y="485" text-anchor="middle">342.1</text>
+<text class="small" x="76" y="172.2" text-anchor="end">0.4384</text>
+<path class="grid" d="M615.0 94V465 M86 94.0H615"/>
+<text class="small" x="615.0" y="485" text-anchor="middle">418.9</text>
 <text class="small" x="76" y="98.0" text-anchor="end">0.4740</text>
-<path class="axis" fill="none" d="M86 94V390H615"/>
-<text x="350.5" y="441" text-anchor="middle">End-to-end p95 latency (ms)</text>
-<text transform="translate(24 242.0) rotate(-90)" text-anchor="middle">NDCG@10</text>
-<text x="657" y="100">Variants · green = Pareto frontier</text>
-<polyline points="137.2,361.4 147.4,259.2 184.3,257.2 233.8,230.7 274.1,214.6 322.1,207.4 334.5,186.7 563.8,122.6" fill="none" stroke="#087859" stroke-width="2"/>
-<circle cx="563.8" cy="122.6" r="5" fill="#087859"><title>Voyage rerank-3 over ANN + BM25: 381.749 ms, 0.456769 NDCG</title></circle>
-<circle cx="664" cy="121" r="4" fill="#087859"/>
-<text x="677" y="125">1. Voyage rerank-3 over ANN + BM25</text>
-<circle cx="334.5" cy="186.7" r="5" fill="#087859"><title>Typed + computed reranker: 215.458 ms, 0.418249 NDCG</title></circle>
-<circle cx="664" cy="146" r="4" fill="#087859"/>
-<text x="677" y="150">2. Typed + computed reranker</text>
-<circle cx="385.3" cy="193.7" r="5" fill="#43628b"><title>Computed-feature reranker: 252.302 ms, 0.414046 NDCG</title></circle>
-<circle cx="664" cy="171" r="4" fill="#43628b"/>
-<text x="677" y="175">3. Computed-feature reranker</text>
-<circle cx="322.1" cy="207.4" r="5" fill="#087859"><title>Learned pairwise reranker: 206.485 ms, 0.405824 NDCG</title></circle>
-<circle cx="664" cy="196" r="4" fill="#087859"/>
-<text x="677" y="200">4. Learned pairwise reranker</text>
-<circle cx="274.1" cy="214.6" r="5" fill="#087859"><title>Identifier-gated RRF: 171.69 ms, 0.401517 NDCG</title></circle>
-<circle cx="664" cy="221" r="4" fill="#087859"/>
-<text x="677" y="225">5. Identifier-gated RRF</text>
-<circle cx="291.2" cy="230.3" r="5" fill="#43628b"><title>Deterministic product reranker: 184.079 ms, 0.392091 NDCG</title></circle>
-<circle cx="664" cy="246" r="4" fill="#43628b"/>
-<text x="677" y="250">6. Deterministic product reranker</text>
-<circle cx="233.8" cy="230.7" r="5" fill="#087859"><title>Min-max score fusion: 142.443 ms, 0.391799 NDCG</title></circle>
-<circle cx="664" cy="271" r="4" fill="#087859"/>
-<text x="677" y="275">7. Min-max score fusion</text>
-<circle cx="323.8" cy="242.8" r="5" fill="#43628b"><title>2:1 Voyage-4 + BM25 RRF: 207.698 ms, 0.384535 NDCG</title></circle>
-<circle cx="664" cy="296" r="4" fill="#43628b"/>
-<text x="677" y="300">8. 2:1 Voyage-4 + BM25 RRF</text>
-<circle cx="184.3" cy="257.2" r="5" fill="#087859"><title>Passage BM25 + fuzzy title/brand: 106.557 ms, 0.375884 NDCG</title></circle>
-<circle cx="664" cy="321" r="4" fill="#087859"/>
-<text x="677" y="325">9. Passage BM25 + fuzzy title/brand</text>
-<circle cx="147.4" cy="259.2" r="5" fill="#087859"><title>Title + locale-aware passage BM25: 79.778 ms, 0.374687 NDCG</title></circle>
-<circle cx="664" cy="346" r="4" fill="#087859"/>
-<text x="677" y="350">10. Title + locale-aware passage BM25</text>
-<circle cx="318.4" cy="260.2" r="5" fill="#43628b"><title>Four-channel RRF: 203.817 ms, 0.374075 NDCG</title></circle>
-<circle cx="664" cy="371" r="4" fill="#43628b"/>
-<text x="677" y="375">11. Four-channel RRF</text>
-<circle cx="208.9" cy="278.9" r="5" fill="#43628b"><title>Baseline: Voyage-4 ANN (Turbopuffer): 124.408 ms, 0.362857 NDCG</title></circle>
-<circle cx="664" cy="396" r="4" fill="#43628b"/>
-<text x="677" y="400">12. Baseline: Voyage-4 ANN (Turbopuffer)</text>
-<circle cx="137.2" cy="361.4" r="5" fill="#087859"><title>Baseline: weighted title/description BM25: 72.3788 ms, 0.313306 NDCG</title></circle>
-<circle cx="664" cy="421" r="4" fill="#087859"/>
-<text x="677" y="425">13. Baseline: weighted title/description BM25</text>
-<text class="small" x="570.8" y="115.6">1</text>
-<text class="small" x="341.5" y="179.7">2</text>
-<text class="small" x="392.3" y="186.7">3</text>
-<text class="small" x="329.1" y="200.4">4</text>
-<text class="small" x="281.1" y="207.6">5</text>
-<text class="small" x="298.2" y="223.3">6</text>
-<text class="small" x="240.8" y="223.7">7</text>
-<text class="small" x="330.8" y="235.8">8</text>
-<text class="small" x="191.3" y="250.2">9</text>
-<text class="small" x="154.4" y="252.2">10</text>
-<text class="small" x="325.4" y="253.2">11</text>
-<text class="small" x="215.9" y="271.9">12</text>
-<text class="small" x="144.2" y="354.4">13</text>
+<path class="axis" fill="none" d="M86 94V465H615"/>
+<text x="350.5" y="516" text-anchor="middle">End-to-end p95 latency (ms)</text>
+<text transform="translate(24 279.5) rotate(-90)" text-anchor="middle">NDCG@10</text>
+<text x="657" y="100">Cohorts use separate Pareto frontiers; do not compare their scores as paired measurements.</text>
+<polyline points="195.7,309.3 245.6,273.4 261.6,272.6" fill="none" stroke="#087859" stroke-width="2"/>
+<polyline points="137.2,429.1 147.4,301.1 184.3,298.6 233.8,265.4 274.1,245.1 322.1,236.1 334.5,210.2 563.8,129.9" fill="none" stroke="#c2410c" stroke-width="2"/>
+<circle cx="563.8" cy="129.9" r="5" fill="#a65d03" stroke="#c2410c" stroke-width="2"><title>Voyage rerank-3 over ANN + BM25 (Historical leaderboard): 381.749 ms, 0.456769 NDCG</title></circle>
+<circle cx="664" cy="121" r="4" fill="#a65d03" stroke="#c2410c" stroke-width="2"/>
+<text x="677" y="125">1. Voyage rerank-3 over ANN + BM25 (Historical leaderboard)</text>
+<circle cx="334.5" cy="210.2" r="5" fill="#a65d03" stroke="#c2410c" stroke-width="2"><title>Typed + computed reranker (Historical leaderboard): 215.458 ms, 0.418249 NDCG</title></circle>
+<circle cx="664" cy="146" r="4" fill="#a65d03" stroke="#c2410c" stroke-width="2"/>
+<text x="677" y="150">2. Typed + computed reranker (Historical leaderboard)</text>
+<circle cx="385.3" cy="219.0" r="5" fill="#a65d03" stroke="#a65d03" stroke-width="2"><title>Computed-feature reranker (Historical leaderboard): 252.302 ms, 0.414046 NDCG</title></circle>
+<circle cx="664" cy="171" r="4" fill="#a65d03" stroke="#a65d03" stroke-width="2"/>
+<text x="677" y="175">3. Computed-feature reranker (Historical leaderboard)</text>
+<circle cx="322.1" cy="236.1" r="5" fill="#a65d03" stroke="#c2410c" stroke-width="2"><title>Learned pairwise reranker (Historical leaderboard): 206.485 ms, 0.405824 NDCG</title></circle>
+<circle cx="664" cy="196" r="4" fill="#a65d03" stroke="#c2410c" stroke-width="2"/>
+<text x="677" y="200">4. Learned pairwise reranker (Historical leaderboard)</text>
+<circle cx="274.1" cy="245.1" r="5" fill="#a65d03" stroke="#c2410c" stroke-width="2"><title>Identifier-gated RRF (Historical leaderboard): 171.69 ms, 0.401517 NDCG</title></circle>
+<circle cx="664" cy="221" r="4" fill="#a65d03" stroke="#c2410c" stroke-width="2"/>
+<text x="677" y="225">5. Identifier-gated RRF (Historical leaderboard)</text>
+<circle cx="291.2" cy="264.8" r="5" fill="#a65d03" stroke="#a65d03" stroke-width="2"><title>Deterministic product reranker (Historical leaderboard): 184.079 ms, 0.392091 NDCG</title></circle>
+<circle cx="664" cy="246" r="4" fill="#a65d03" stroke="#a65d03" stroke-width="2"/>
+<text x="677" y="250">6. Deterministic product reranker (Historical leaderboard)</text>
+<circle cx="233.8" cy="265.4" r="5" fill="#a65d03" stroke="#c2410c" stroke-width="2"><title>Min-max score fusion (Historical leaderboard): 142.443 ms, 0.391799 NDCG</title></circle>
+<circle cx="664" cy="271" r="4" fill="#a65d03" stroke="#c2410c" stroke-width="2"/>
+<text x="677" y="275">7. Min-max score fusion (Historical leaderboard)</text>
+<circle cx="323.8" cy="280.5" r="5" fill="#a65d03" stroke="#a65d03" stroke-width="2"><title>2:1 Voyage-4 + BM25 RRF (Historical leaderboard): 207.698 ms, 0.384535 NDCG</title></circle>
+<circle cx="664" cy="296" r="4" fill="#a65d03" stroke="#a65d03" stroke-width="2"/>
+<text x="677" y="300">8. 2:1 Voyage-4 + BM25 RRF (Historical leaderboard)</text>
+<circle cx="184.3" cy="298.6" r="5" fill="#a65d03" stroke="#c2410c" stroke-width="2"><title>Passage BM25 + fuzzy title/brand (Historical leaderboard): 106.557 ms, 0.375884 NDCG</title></circle>
+<circle cx="664" cy="321" r="4" fill="#a65d03" stroke="#c2410c" stroke-width="2"/>
+<text x="677" y="325">9. Passage BM25 + fuzzy title/brand (Historical leaderboard)</text>
+<circle cx="147.4" cy="301.1" r="5" fill="#a65d03" stroke="#c2410c" stroke-width="2"><title>Title + locale-aware passage BM25 (Historical leaderboard): 79.778 ms, 0.374687 NDCG</title></circle>
+<circle cx="664" cy="346" r="4" fill="#a65d03" stroke="#c2410c" stroke-width="2"/>
+<text x="677" y="350">10. Title + locale-aware passage BM25 (Historical leaderboard)</text>
+<circle cx="318.4" cy="302.4" r="5" fill="#a65d03" stroke="#a65d03" stroke-width="2"><title>Four-channel RRF (Historical leaderboard): 203.817 ms, 0.374075 NDCG</title></circle>
+<circle cx="664" cy="371" r="4" fill="#a65d03" stroke="#a65d03" stroke-width="2"/>
+<text x="677" y="375">11. Four-channel RRF (Historical leaderboard)</text>
+<circle cx="208.9" cy="325.8" r="5" fill="#a65d03" stroke="#a65d03" stroke-width="2"><title>Baseline: Voyage-4 ANN (Turbopuffer) (Historical leaderboard): 124.408 ms, 0.362857 NDCG</title></circle>
+<circle cx="664" cy="396" r="4" fill="#a65d03" stroke="#a65d03" stroke-width="2"/>
+<text x="677" y="400">12. Baseline: Voyage-4 ANN (Turbopuffer) (Historical leaderboard)</text>
+<circle cx="137.2" cy="429.1" r="5" fill="#a65d03" stroke="#c2410c" stroke-width="2"><title>Baseline: weighted title/description BM25 (Historical leaderboard): 72.3788 ms, 0.313306 NDCG</title></circle>
+<circle cx="664" cy="421" r="4" fill="#a65d03" stroke="#c2410c" stroke-width="2"/>
+<text x="677" y="425">13. Baseline: weighted title/description BM25 (Historical leaderboard)</text>
+<circle cx="261.6" cy="272.6" r="5" fill="#43628b" stroke="#087859" stroke-width="2"><title>RMS stack + fuzzy-position boost 0.15 (Fresh lexical): 162.603 ms, 0.388344 NDCG</title></circle>
+<circle cx="664" cy="446" r="4" fill="#43628b" stroke="#087859" stroke-width="2"/>
+<text x="677" y="450">14. RMS stack + fuzzy-position boost 0.15 (Fresh lexical)</text>
+<circle cx="245.6" cy="273.4" r="5" fill="#43628b" stroke="#087859" stroke-width="2"><title>RMS lexical candidate stack (Fresh lexical): 150.972 ms, 0.387974 NDCG</title></circle>
+<circle cx="664" cy="471" r="4" fill="#43628b" stroke="#087859" stroke-width="2"/>
+<text x="677" y="475">15. RMS lexical candidate stack (Fresh lexical)</text>
+<circle cx="195.7" cy="309.3" r="5" fill="#43628b" stroke="#087859" stroke-width="2"><title>Passage BM25 + fuzzy title/brand (Fresh lexical): 114.811 ms, 0.370765 NDCG</title></circle>
+<circle cx="664" cy="496" r="4" fill="#43628b" stroke="#087859" stroke-width="2"/>
+<text x="677" y="500">16. Passage BM25 + fuzzy title/brand (Fresh lexical)</text>
+<text class="small" x="570.8" y="122.9">1</text>
+<text class="small" x="341.5" y="203.2">2</text>
+<text class="small" x="392.3" y="212.0">3</text>
+<text class="small" x="329.1" y="229.1">4</text>
+<text class="small" x="281.1" y="238.1">5</text>
+<text class="small" x="298.2" y="257.8">6</text>
+<text class="small" x="240.8" y="258.4">7</text>
+<text class="small" x="330.8" y="273.5">8</text>
+<text class="small" x="191.3" y="291.6">9</text>
+<text class="small" x="154.4" y="294.1">10</text>
+<text class="small" x="325.4" y="295.4">11</text>
+<text class="small" x="215.9" y="318.8">12</text>
+<text class="small" x="144.2" y="422.1">13</text>
+<text class="small" x="268.6" y="265.6">14</text>
+<text class="small" x="252.6" y="266.4">15</text>
+<text class="small" x="202.7" y="302.3">16</text>
 </svg>
