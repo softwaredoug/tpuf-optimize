@@ -10,6 +10,14 @@ from plot_pareto import Point, render_svg
 ROOT = Path(__file__).resolve().parents[1]
 START = "<!-- esci-benchmark:start -->"
 END = "<!-- esci-benchmark:end -->"
+CATEGORY_LABELS = {
+    "Pure lexical": "(a) Pure lexical",
+    "Hybrid (lexical + embedding)": "(b) Hybrid",
+    "Learned reranker": "(c) Learned reranker",
+    "Third-party reranker": "(d) Third-party reranker",
+    "Pure embedding": "Pure embedding (additional)",
+    "Handcrafted reranker": "Handcrafted reranker (additional)",
+}
 
 
 def render_block(aggregate, assets):
@@ -30,11 +38,16 @@ def render_block(aggregate, assets):
             f"The second NDCG column covers the {disjoint:,} queries not found in "
             f"{aggregate['checked_artifacts']} available historical task artifacts.",
             "",
+            "Classes: (a) pure lexical; (b) lexical + embedding; "
+            "(c) locally learned reranker; (d) third-party reranker. "
+            "Pure embedding and handcrafted reranking are listed separately "
+            "because they do not fit those four definitions.",
+            "",
         ]
     lines += [
-        "| Variant | NDCG@10 (full) | NDCG@10 (disjoint) | p50 (ms) | p95 (ms) | "
+        "| Variant | Class | NDCG@10 (full) | NDCG@10 (disjoint) | p50 (ms) | p95 (ms) | "
         f"Cost* (USD/{query_count:,} queries) | Commit |",
-        "|---|---:|---:|---:|---:|---:|---|",
+        "|---|---|---:|---:|---:|---:|---:|---|",
     ]
     ordered = sorted(
         VARIANTS,
@@ -57,7 +70,9 @@ def render_block(aggregate, assets):
         commit_url = f"https://github.com/softwaredoug/tpuf-optimize/commit/{variant.revision}"
         branch_url = f"https://github.com/softwaredoug/tpuf-optimize/tree/{variant.branch}"
         lines.append(
-            f"| [{variant.name}]({branch_url}) | {' | '.join(values)} | {cost_cell} | "
+            f"| [{variant.name}]({branch_url}) | "
+            f"{CATEGORY_LABELS.get(variant.category, variant.category)} | "
+            f"{' | '.join(values)} | {cost_cell} | "
             f"[`{variant.revision}`]({commit_url}) |"
         )
     if costs:
