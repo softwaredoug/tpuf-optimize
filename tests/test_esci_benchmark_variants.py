@@ -31,7 +31,7 @@ class FrozenVariantTests(unittest.TestCase):
         categories = {variant.slug: variant.category for variant in VARIANTS}
         self.assertEqual(categories["bm25"], "Lexical")
         self.assertEqual(categories["hybrid"], "Hybrid (lexical + embedding)")
-        self.assertEqual(categories["typed"], "Learned reranker")
+        self.assertEqual(categories["typed"], "LTR")
         self.assertEqual(categories["voyage-rerank"], "Third-party reranker")
         self.assertEqual(categories["voyage"], "Embedding")
         self.assertEqual(categories["product"], "Hybrid (lexical + embedding)")
