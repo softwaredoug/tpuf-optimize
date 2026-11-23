@@ -14,6 +14,7 @@ class Namespace:
     def __init__(self):
         self.calls = []
         self.options = []
+        self.serial_calls = []
 
     def multi_query(self, *, queries, **options):
         self.calls.append(list(queries))
@@ -25,6 +26,12 @@ class Namespace:
         count = 1 if "rerank_by" in options else len(queries)
         return SimpleNamespace(results=[result for _ in range(count)])
 
+    def query(self, **query):
+        self.serial_calls.append(query)
+        return SimpleNamespace(rows=[Row.from_dict({
+            "id": "doc-a", "$dist": .3, "title": "blue shoe", "brand": "example",
+        })])
+
 
 class FrozenVariantTests(unittest.TestCase):
     def test_each_leader_has_an_explicit_strategy_class(self):
@@ -35,6 +42,8 @@ class FrozenVariantTests(unittest.TestCase):
         self.assertEqual(categories["voyage-rerank"], "Third-party reranker")
         self.assertEqual(categories["voyage"], "Embedding")
         self.assertEqual(categories["product"], "Hybrid (lexical + embedding)")
+        self.assertEqual(categories["single-composite"], "Lexical")
+        self.assertEqual(categories["single-rerank"], "Lexical")
 
     def test_all_variants_rank_independently_on_every_execution(self):
         request = SearchRequest("qid", "blue shoe", "us")
@@ -47,6 +56,21 @@ class FrozenVariantTests(unittest.TestCase):
                     self.assertEqual(_ranked_rows(request, rows)[0][:3], ("qid", "doc-a", 1))
                     self.assertGreaterEqual(latency, 0)
                     self.assertEqual(retries, 0)
+                if variant.slug in {"single-composite", "single-rerank"}:
+                    self.assertEqual(namespace.calls, [])
+                    self.assertEqual(len(namespace.serial_calls), 2)
+                    expected_top_k = 100 if variant.slug == "single-rerank" else 10
+                    self.assertEqual(
+                        [query["top_k"] for query in namespace.serial_calls],
+                        [expected_top_k, expected_top_k],
+                    )
+                    if variant.slug == "single-rerank":
+                        self.assertTrue(all(
+                            {"title", "description", "brand", "locale"}
+                            <= set(query["include_attributes"])
+                            for query in namespace.serial_calls
+                        ))
+                    continue
                 expected_calls = 4 if variant.slug in {"computed", "typed"} else 2
                 self.assertEqual(len(namespace.calls), expected_calls)
                 if variant.slug == "voyage":

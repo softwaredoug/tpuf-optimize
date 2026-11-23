@@ -81,6 +81,24 @@ VARIANTS = (
         False,
         category="Lexical",
     ),
+    Variant(
+        "single-composite",
+        "One-request composite BM25 (title + passage + brand)",
+        "911ac84cabb89bfc276c74faab123c5d0505c7a4",
+        "lexical-one-query-composite",
+        .372057,
+        False,
+        category="Lexical",
+    ),
+    Variant(
+        "single-rerank",
+        "One-request BM25 + local lexical reranker",
+        "079cac2a8d71109a53c78369668024fd3ac2efb0",
+        "experiment/lexical-one-query-rerank",
+        .375447,
+        False,
+        category="Lexical",
+    ),
     Variant("passage", "Title + locale-aware passage BM25", "cdb2d64",
             "relevance/field-weights-passage", .37658, False,
             category="Lexical"),
@@ -144,6 +162,15 @@ class FrozenSearcher(Searcher):
             self.frozen = strategy.TPufStrategy(
                 field_fusion="passage_fold_brand_whitespace"
             )
+            return
+        if slug == "single-composite":
+            self.frozen = load(rev, "strategy").TPufStrategy(
+                variant="composite",
+            )
+            return
+        if slug == "single-rerank":
+            self.single_request = load(rev, "single_request")
+            self.frozen = self.single_request.SingleRequestLexicalStrategy()
             return
         if slug == "voyage-rerank":
             self.native_rerank = load(rev, "native_rerank")
@@ -264,6 +291,17 @@ class FrozenSearcher(Searcher):
                 ranked = self.frozen.rerank_lexically(
                     text, candidates, .18, .03, "rms",
                 )
+            return [ranked[:top_k]]
+        if slug == "single-composite":
+            query = self.frozen.query(text, locale, top_k)
+            response = self.namespace.query(**query)
+            return [(response.rows or [])[:top_k]]
+        if slug == "single-rerank":
+            query = self.frozen.query(text, locale, 100)
+            response = self.namespace.query(**query)
+            ranked = self.single_request.rerank_candidates(
+                text, response.rows or [], .35,
+            )
             return [ranked[:top_k]]
         if self.direct:
             if slug == "voyage":

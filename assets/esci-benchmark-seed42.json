@@ -95,6 +95,22 @@
       "p95_ms": 172.13054187595844,
       "retries_429": 0
     },
+    "single-composite": {
+      "commit": "911ac84cabb89bfc276c74faab123c5d0505c7a4",
+      "ndcg_at_10": 0.36702983947072054,
+      "disjoint_ndcg_at_10": 0.3683714913312083,
+      "p50_ms": 61.524687451310456,
+      "p95_ms": 69.75037488155067,
+      "retries_429": 0
+    },
+    "single-rerank": {
+      "commit": "079cac2a8d71109a53c78369668024fd3ac2efb0",
+      "ndcg_at_10": 0.37542671928294596,
+      "disjoint_ndcg_at_10": 0.3754456414222974,
+      "p50_ms": 82.33254193328321,
+      "p95_ms": 100.31970916315913,
+      "retries_429": 0
+    },
     "passage": {
       "commit": "cdb2d64a83838c40bfc86394002143e6b6ad5349",
       "ndcg_at_10": 0.366265558098991,
@@ -154,6 +170,8 @@
       "fuzzy": 0.0,
       "rms-stack": 0.0,
       "rms-stack-fuzzy015": 0.0,
+      "single-composite": 0.0,
+      "single-rerank": 0.0,
       "passage": 0.0,
       "voyage": 3.27039e-07,
       "bm25": 0.0,
@@ -171,6 +189,8 @@
       "fuzzy": 0.0,
       "rms-stack": 0.0,
       "rms-stack-fuzzy015": 0.0,
+      "single-composite": 0.0,
+      "single-rerank": 0.0,
       "passage": 0.0,
       "voyage": 0.001635195,
       "bm25": 0.0,
