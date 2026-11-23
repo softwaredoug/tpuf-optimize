@@ -12,6 +12,31 @@ and holdout data separate, and use a fresh matched Referee session for final
 benchmarks. The shared `Indexer`, `Searcher`, and batch runners provide the
 common data and I/O layer.
 
+## Experiment: weighted title/description BM25 baseline
+
+`main` uses one locale-filtered Turbopuffer BM25 query per search. It sums title
+BM25 weighted by `2.0` and description BM25 weighted by `1.0`, using the
+locale-specific analyzer when available and the default analyzer otherwise.
+The query returns the title, description, and locale attributes for the top
+`k` documents. The outer `Searcher` can batch these queries through
+Turbopuffer's multi-query API.
+
+```python
+analyzer = analyzer_for(locale) or "word_v4__default"
+query = {
+    "rank_by": (
+        "Sum",
+        (
+            ("Product", 2.0, (f"title__{analyzer}", "BM25", query_text)),
+            ("Product", 1.0, (f"description__{analyzer}", "BM25", query_text)),
+        ),
+    ),
+    "filters": ("locale", "Eq", locale),
+    "top_k": k,
+    "include_attributes": ["title", "description", "locale"],
+}
+```
+
 ## Setup
 
 This project uses Python 3.15.2, managed by asdf, and `uv` for the environment
