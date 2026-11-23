@@ -1,3 +1,5 @@
+> **LLM-generated:** Text in this file is LLM generated.
+
 # Turbopuffer experiments
 
 Utilities for indexing datasets into Turbopuffer and experimenting with search
@@ -77,6 +79,25 @@ filtered query: title BM25 at weight 1.0 plus passage BM25 at weight 0.5, with
 `top_k=100` and the existing title, description, brand, and locale attributes
 returned. `search_one` makes one serial `namespace.query` call; reranking only
 uses those results.
+
+The Turbopuffer query DSL is:
+
+```python
+suffix = locale_analyzer(locale) or "word_v4__default"
+query = {
+    "rank_by": (
+        "Sum",
+        (
+            ("Product", 1.0, (f"title__{suffix}", "BM25", query_text)),
+            ("Product", 0.5, (f"passage__{suffix}", "BM25", query_text)),
+        ),
+    ),
+    "filters": ("locale", "Eq", locale),
+    "top_k": 100,
+    "include_attributes": ["title", "description", "brand", "locale"],
+}
+namespace.query(**query)
+```
 
 The reranker combines the original candidate rank with exact local evidence:
 
