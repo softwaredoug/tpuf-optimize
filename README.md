@@ -99,17 +99,100 @@ query = {
 namespace.query(**query)
 ```
 
-The reranker combines the original candidate rank with exact local evidence:
+### How local lexical evidence is scored
 
-```text
-local =
-    0.45 * unique-query-term coverage in title
-  + 0.20 * adjacent query-pair coverage in title
-  + 0.15 * exact title phrase
-  + 0.10 * unique-query-term coverage in brand
-  + 0.10 * unique-query-term coverage in description
-score = (1 - boost) * normalized_original_rank + boost * local
+The reranker tokenizes the query and returned fields consistently: Unicode
+normalization and case-folding make matching case- and accent-insensitive;
+punctuation separates tokens, and CJK characters are treated as individual
+tokens. For example, `Red leather shoes` becomes `["red", "leather", "shoes"]`.
+
+It computes five signals, each between 0 and 1:
+
+- **Title term coverage:** fraction of distinct query terms present anywhere
+  in the title. For `red leather shoes`, a title containing `red` and `shoes`
+  but not `leather` scores `2/3`.
+- **Adjacent-pair coverage:** fraction of adjacent query-token pairs that also
+  occur next to each other in the title. The query has pairs `(red, leather)`
+  and `(leather, shoes)`. A title containing `red leather` but not
+  `leather shoes` scores `1/2`.
+- **Exact title phrase:** `1` if all query tokens occur contiguously and in
+  order in the title, otherwise `0`. Extra words before or after the phrase
+  are allowed; intervening words are not.
+- **Brand term coverage** and **description term coverage:** each is the
+  fraction of distinct query terms present in that field.
+
+The weighted sum of these signals is the local score. Term coverage uses
+distinct query terms; pair and phrase checks use the query's token order. The
+BM25 score itself is not mixed into this value. Instead, the candidate's
+original position in the BM25 result list supplies a rank anchor:
+
+```python
+def coverage(query_terms, field_terms):
+    distinct_query_terms = set(query_terms)
+    if not distinct_query_terms:
+        return 0.0
+    return len(distinct_query_terms & set(field_terms)) / len(distinct_query_terms)
+
+
+def local_score(query, row):
+    q = tokens(query)  # normalized tokens, as described above
+    title = tokens(row.title)
+    brand = tokens(row.brand)
+    description = tokens(row.description)
+
+    query_pairs = list(zip(q, q[1:]))
+    title_pairs = set(zip(title, title[1:]))
+    adjacent_pair_coverage = (
+        sum(pair in title_pairs for pair in query_pairs) / len(query_pairs)
+        if query_pairs else 0.0
+    )
+    exact_title_phrase = float(
+        len(q) > 1 and contains_contiguous_sequence(title, q)
+    )
+
+    return (
+        0.45 * coverage(q, title)
+        + 0.20 * adjacent_pair_coverage
+        + 0.15 * exact_title_phrase
+        + 0.10 * coverage(q, brand)
+        + 0.10 * coverage(q, description)
+    )
+
+
+def rerank(query, bm25_rows, boost=0.35):
+    count = len(bm25_rows)
+    scored = []
+    for index, row in enumerate(bm25_rows):
+        original_rank_score = (count - index) / count  # rank 1 => 1.0
+        score = (
+            (1.0 - boost) * original_rank_score
+            + boost * local_score(query, row)
+        )
+        scored.append((score, index, row))
+
+    # Preserve BM25 order for exact score ties.
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    return [row for score, index, row in scored]
 ```
+
+With `boost=0.35`, 65% of the final score comes from the normalized BM25
+position and 35% from local evidence. For 100 candidates, rank 1 has an
+original-rank score of `1.00`, while rank 8 has `(100 - 7) / 100 = 0.93`.
+The rank score is based on position, not Turbopuffer's raw BM25 score.
+
+For example, for query `red leather shoes`:
+
+| Candidate | Original BM25 rank | Title | Brand | Description | Local score | Final score |
+|---|---:|---|---|---|---:|---:|
+| A | 8 | `Red leather shoes for women` | `Acme` | `Durable leather shoes` | `0.8667` | `0.9078` |
+| B | 1 | `Red hiking boots` | `North` | `Leather shoes for trails` | `0.2167` | `0.7258` |
+
+Candidate A gets full title coverage, both adjacent pairs, and the exact title
+phrase; its description covers two of the three query terms. Candidate B gets
+one-third title coverage and two-thirds description coverage, but no matching
+adjacent title pair or phrase. The local evidence is enough for A to overtake
+the original rank-1 candidate, while BM25 rank still contributes most of the
+final score.
 
 Boost `0.35` was selected from `{0.05, 0.10, 0.20, 0.35}` on a deterministic,
 query-disjoint 105-query validation fold of the assigned Referee training
